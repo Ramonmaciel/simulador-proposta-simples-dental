@@ -223,7 +223,6 @@
     <div class="max-w-5xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
       <button onclick="voltarVendedor()" class="font-semibold text-slate-300 hover:text-white">← Voltar para a tela de trabalho</button>
       <div class="flex items-center gap-2">
-        <button onclick="copiarLink()" id="btn-link" class="px-3 py-1.5 font-bold bg-slate-700 hover:bg-slate-600 rounded-lg">Copiar link</button>
         <button onclick="gerarImagem()" id="btn-img" class="px-3 py-1.5 font-bold bg-[#25D366] hover:bg-[#1ea952] text-white rounded-lg">Gerar imagem para WhatsApp</button>
         <button onclick="imprimir()" class="px-3 py-1.5 font-semibold text-slate-300 hover:text-white">PDF</button>
       </div>
@@ -329,13 +328,13 @@ let PRICING = carregarPricing();
 
 function carregarPricing(){
   try {
-    const raw = localStorage.getItem('sd_pricing_v11');
+    const raw = localStorage.getItem('sd_pricing_v12');
     if(raw) return JSON.parse(raw);
   } catch(e){}
   return JSON.parse(JSON.stringify(PRICING_PADRAO));
 }
 function salvarPricing(){
-  try { localStorage.setItem('sd_pricing_v11', JSON.stringify(PRICING)); } catch(e){}
+  try { localStorage.setItem('sd_pricing_v12', JSON.stringify(PRICING)); } catch(e){}
 }
 
 /* =========================================================
@@ -931,23 +930,11 @@ function abrirProposta(){
   mostrar('view-proposta');
   window.scrollTo(0,0);
 }
-function voltarVendedor(){
-  try { history.replaceState(null,'',location.pathname); } catch(e){ location.hash = ''; }
-  mostrar('view-vendedor');
-}
+function voltarVendedor(){ mostrar('view-vendedor'); }
 function mostrar(id){
   ['view-vendedor','view-proposta'].forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id));
 }
 
-function encodeProposta(dados){
-  const payload = { r: dados.r, P: dados.P, validade: dados.validade };
-  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-}
-function decodeProposta(hash){
-  const payload = JSON.parse(decodeURIComponent(escape(atob(hash))));
-  const res = calcularTodos(payload.r, payload.P);
-  return { r: payload.r, P: payload.P, res, validade: payload.validade };
-}
 // Uma folha A4 com margem de 8mm tem ~1085px de altura útil a 96dpi.
 // Mede o conteúdo e escolhe o fator de redução necessário.
 function ajustarZoomImpressao(){
@@ -1082,14 +1069,6 @@ async function copiarImagem(){
   setTimeout(()=> btn.textContent = rotulo, 3500);
 }
 
-function copiarLink(){
-  const url = location.origin + location.pathname + '#p=' + encodeProposta(ULTIMO);
-  navigator.clipboard.writeText(url).then(()=>{
-    const b = document.getElementById('btn-link');
-    const o = b.textContent; b.textContent = 'Link copiado';
-    setTimeout(()=> b.textContent = o, 2500);
-  });
-}
 
 /* =========================================================
    ADMIN
@@ -1208,19 +1187,6 @@ function resetPricing(){
    BOOT
    ========================================================= */
 window.addEventListener('DOMContentLoaded', () => {
-  const hash = location.hash.startsWith('#p=') ? location.hash.slice(3) : null;
-  if(hash){
-    try {
-      renderProposta(decodeProposta(hash));
-      mostrar('view-proposta');
-      document.querySelector('#view-proposta .no-print').innerHTML =
-        '<div class="max-w-5xl mx-auto px-4 py-2.5 flex justify-end gap-2 text-xs">' +
-        '<button onclick="gerarImagem()" id="btn-img" class="px-3 py-1.5 font-bold bg-[#25D366] text-white rounded-lg">Gerar imagem</button>' +
-        '<button onclick="imprimir()" class="px-3 py-1.5 font-semibold text-slate-300 hover:text-white">PDF</button></div>';
-      return;
-    } catch(e){ console.error('Link inválido', e); }
-  }
-
   document.getElementById('q-secia').innerHTML =
     '<option value="">Não incluir</option>' +
     PRICING.recorrentes.secia.map(t=>`<option value="${t.atend}">Até ${num(t.atend)} atendimentos — ${brl(t.preco)}</option>`).join('');
