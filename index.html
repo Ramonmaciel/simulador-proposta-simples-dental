@@ -291,7 +291,7 @@ const PRICING_PADRAO = {
   },
   pacotes: {
     nfe:          { rotulo: 'notas fiscais', unidade: 'notas',      opcoes: [ {qtd:50,preco:19.90}, {qtd:100,preco:29.90}, {qtd:200,preco:39.90} ] },
-    assinatura:   { rotulo: 'assinaturas',   unidade: 'documentos', opcoes: [ {qtd:250,preco:99.90}, {qtd:500,preco:199.90,confirmar:true}, {qtd:1000,preco:299.90} ] },
+    assinatura:   { rotulo: 'assinaturas',   unidade: 'documentos', opcoes: [ {qtd:250,preco:99.90}, {qtd:600,preco:199.90}, {qtd:1000,preco:299.90} ] },
     wppUtilidade: { rotulo: 'mensagens de confirmação', unidade: 'mensagens', opcoes: [ {qtd:300,preco:36.00,precoCheio:105.00} ] }
   },
   recorrentes: {
@@ -329,13 +329,13 @@ let PRICING = carregarPricing();
 
 function carregarPricing(){
   try {
-    const raw = localStorage.getItem('sd_pricing_v10');
+    const raw = localStorage.getItem('sd_pricing_v11');
     if(raw) return JSON.parse(raw);
   } catch(e){}
   return JSON.parse(JSON.stringify(PRICING_PADRAO));
 }
 function salvarPricing(){
-  try { localStorage.setItem('sd_pricing_v10', JSON.stringify(PRICING)); } catch(e){}
+  try { localStorage.setItem('sd_pricing_v11', JSON.stringify(PRICING)); } catch(e){}
 }
 
 /* =========================================================
