@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador Simples Dental</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  .num-input::-webkit-inner-spin-button, .num-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .logo-sd svg, [style*="height:26px"] > svg { height: 100%; width: auto; display: block; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff !important; }
+    .print-break { break-inside: avoid; page-break-inside: avoid; }
+    @page { margin: 8mm; size: A4; }
+    /* Comprime a proposta para caber em uma folha só. O fator é calibrado
+       pela altura real do conteúdo — ver ajustarZoomImpressao(). */
+    #proposta-body { zoom: var(--print-zoom, 0.62); max-width: none !important; padding: 0 !important; }
+    /* A folha A4 é mais estreita que o breakpoint md, então as duas colunas
+       internas do card colapsariam e dobrariam a altura. Forçamos aqui. */
+    .dois-planos { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+    /* Aperta os blocos auxiliares na folha para sobrar espaço aos planos. */
+    .print-tight { padding: 12px !important; margin-bottom: 8px !important; }
+    .print-tight p { line-height: 1.35 !important; }
+    .print-mini { font-size: 10px !important; line-height: 1.35 !important; }
+    .dois-planos { margin-bottom: 8px !important; }
+    .print-rodape { margin-top: 6px !important; font-size: 8px !important; }
+    .cap-inclusos { display: grid !important; grid-template-columns: repeat(3, minmax(0,1fr)) !important; gap: 8px !important; }
+    .cap-cabecalho { flex-wrap: nowrap !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased">
+
+<!-- =========================================================
+     TELA 1 — VENDEDOR
+     ========================================================= -->
+<div id="view-vendedor" class="hidden">
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+    <div class="max-w-[1500px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="logo-sd" style="height:24px" id="logo-header"></div>
+        <div>
+          <h1 class="font-black text-lg leading-none tracking-tight">Simulador de Proposta</h1>
+          <p class="text-xs text-slate-500 mt-0.5">Tela de trabalho — <span class="font-semibold text-amber-600">não mostrar ao cliente</span></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="abrirAdmin()" class="px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg">Tabela de preços</button>
+        <button onclick="abrirProposta()" class="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Ver proposta do cliente →</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1500px] mx-auto px-4 py-6 grid grid-cols-1 xl:grid-cols-[minmax(0,460px)_1fr] gap-6 items-start">
+
+    <!-- COLUNA DE PERGUNTAS -->
+    <section class="bg-white rounded-2xl border border-slate-200 p-5">
+      <div class="mb-5">
+        <h2 class="font-bold text-slate-900">Descoberta</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Responda com o cliente na call. O motor dimensiona os pacotes e escolhe o plano.</p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Identificação -->
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
+            <span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Clínica / Doutor(a)</span>
+            <input id="q-cliente" type="text" placeholder="Dra. Ana Silva" class="mt-1 w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+          </label>
+          <label class="block">
+            <span class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Vendedor</span>
+            <input id="q-vendedor" type="text" placeholder="Seu nome" class="mt-1 w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+          </label>
+        </div>
+
+        <!-- 1. Consultas -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">1.</span> Quantas consultas em média por mês?</p>
+          <input id="q-consultas" type="number" min="0" value="120" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+          <p class="text-[11px] text-slate-500 mt-1.5">Base para dimensionar as mensagens de confirmação.</p>
+        </div>
+
+        <!-- 2. Confirmação -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">2.</span> Como quer confirmar as consultas?</p>
+          <div id="q-confirmacao" class="mt-2 space-y-1.5"></div>
+          <p class="text-[11px] text-slate-500 mt-2">A semiautomática pelo WhatsApp Web não tem custo de mensagem no plano Pro.</p>
+          <div id="q-auto-extras" class="hidden">
+            <label class="mt-2 flex items-start gap-2 text-[11px] text-slate-600 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <input id="q-manter-automatica" type="checkbox" class="mt-0.5 w-3.5 h-3.5 rounded text-blue-600">
+              <span>Mostrar no <b>Pro</b> a confirmação 100% automática como opcional — o padrão do Pro continua sendo o WhatsApp Web incluso</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 3. NF-e -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">3.</span> Quantas notas fiscais emite por mês?</p>
+          <input id="q-notas" type="number" min="0" value="40" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+          <p class="text-[11px] text-slate-500 mt-1.5">Zero se o contador emite fora do sistema.</p>
+        </div>
+
+        <!-- 4. Assinatura -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">4.</span> Quer assinar os documentos digitalmente?</p>
+          <div id="q-assinatura" class="mt-2 space-y-1.5"></div>
+          <div id="q-docs-wrap" class="mt-3 hidden">
+            <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">5.</span> Quantos documentos por mês?</p>
+            <input id="q-documentos" type="number" min="0" value="60" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-[11px] text-slate-500 mt-1.5">Anamnese, evolução, contrato. Estimativa serve.</p>
+          </div>
+        </div>
+
+        <!-- 6. Migração -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">6.</span> Vem de outro software?</p>
+          <label class="mt-2 flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input id="q-migracao" type="checkbox" class="w-4 h-4 rounded text-blue-600">
+            Sim — incluir migração de dados (gratuita)
+          </label>
+        </div>
+
+        <!-- Extras manuais -->
+        <div class="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50">
+          <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Add-ons opcionais (fora do fluxo de perguntas)</p>
+          <p class="text-[11px] text-slate-400 mb-2">Disponíveis em qualquer plano.</p>
+          <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-2">
+            <input id="q-sia" type="checkbox" class="w-4 h-4 rounded text-blue-600">
+            SIA — prontuário por voz
+          </label>
+          <label class="block mb-2">
+            <span class="text-xs text-slate-600">SEC IA (atendimentos/mês)</span>
+            <select id="q-secia" class="mt-1 w-full p-2 border border-slate-300 rounded-lg text-sm bg-white"></select>
+          </label>
+          <div id="q-secia-extras" class="hidden pl-2 border-l-2 border-slate-200 space-y-2">
+            <div id="q-secia-promo-wrap">
+              <label class="flex items-start gap-2 text-[11px] text-slate-700 cursor-pointer bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                <input id="q-secia-promo" type="checkbox" class="mt-0.5 w-3.5 h-3.5 rounded text-emerald-600">
+                <span id="q-secia-promo-txt">Aplicar a condição especial da SEC IA</span>
+              </label>
+            </div>
+            <div id="q-secia-promo-bloq" class="hidden text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              A condição especial da SEC IA <b>não está disponível</b> porque há desconto na mensalidade do plano. Zere o desconto do plano para liberar.
+            </div>
+            <div id="q-secia-desc-wrap">
+              <span class="text-xs text-slate-600 block mb-1">Ou desconto livre na SEC IA</span>
+              <div class="flex items-center gap-2">
+                <input id="q-secia-desc" type="number" min="0" max="100" value="" placeholder="0" class="num-input w-20 p-2 border border-slate-300 rounded-lg text-sm">
+                <span class="text-[11px] text-slate-500">% por</span>
+                <input id="q-secia-desc-meses" type="number" min="0" max="12" value="" placeholder="0" class="num-input w-20 p-2 border border-slate-300 rounded-lg text-sm">
+                <span class="text-[11px] text-slate-500">meses</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comercial -->
+        <div class="border border-blue-200 bg-blue-50/60 rounded-xl p-4">
+          <p class="text-[11px] font-bold uppercase tracking-wide text-blue-800 mb-2">Condição comercial</p>
+          <label class="block mb-3">
+            <span class="text-xs text-blue-900 font-semibold">Comparar quais planos na proposta</span>
+            <select id="q-comparar" class="mt-1 w-full p-2 border border-blue-200 rounded-lg text-sm bg-white font-semibold">
+              <option value="plus,pro">Plus e Pro</option>
+              <option value="basic,plus">Basic e Plus</option>
+              <option value="basic,pro">Basic e Pro</option>
+            </select>
+            <span class="block text-[11px] text-blue-700/80 mt-1">A proposta mostra sempre dois planos, nunca os três.</span>
+          </label>
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <label class="block">
+              <span class="text-xs text-blue-900 font-semibold">Cobrança</span>
+              <select id="q-frequencia" class="mt-1 w-full p-2 border border-blue-200 rounded-lg text-sm bg-white">
+                <option value="mensal">Mensal</option>
+                <option value="anual">Anual (12x com 1 mês grátis)</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs text-blue-900 font-semibold">Proposta válida até</span>
+              <input id="q-validade" type="date" class="mt-1 w-full p-2 border border-blue-200 rounded-lg text-sm bg-white">
+            </label>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="block col-span-3 sm:col-span-1">
+              <span class="text-xs text-blue-900 font-semibold">Desconto no plano</span>
+              <select id="q-desc-tipo" class="mt-1 w-full p-2 border border-blue-200 rounded-lg text-sm bg-white">
+                <option value="nenhum">Sem desconto</option>
+                <option value="percentual">% de desconto</option>
+                <option value="gratis">Meses grátis</option>
+              </select>
+            </label>
+            <label class="block" id="wrap-desc-valor">
+              <span class="text-xs text-blue-900 font-semibold">%</span>
+              <input id="q-desc-valor" type="number" min="0" max="100" value="" placeholder="0" class="num-input mt-1 w-full p-2 border border-blue-200 rounded-lg text-sm">
+            </label>
+            <label class="block" id="wrap-desc-meses">
+              <span class="text-xs text-blue-900 font-semibold">Por N meses</span>
+              <input id="q-desc-meses" type="number" min="0" max="12" value="" placeholder="0" class="num-input mt-1 w-full p-2 border border-blue-200 rounded-lg text-sm">
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRÉVIA -->
+    <section>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-900">
+        <b>Prévia interna.</b> Mostra custo, margem de desconto e as travas de plano. O cliente vê a tela limpa em "Ver proposta do cliente".
+      </div>
+      <div id="preview-vendedor"></div>
+    </section>
+  </main>
+</div>
+
+<!-- =========================================================
+     TELA 2 — PROPOSTA DO CLIENTE
+     ========================================================= -->
+<div id="view-proposta" class="hidden">
+  <div class="no-print bg-slate-900 text-white">
+    <div class="max-w-5xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <button onclick="voltarVendedor()" class="font-semibold text-slate-300 hover:text-white">← Voltar para a tela de trabalho</button>
+      <div class="flex items-center gap-2">
+        <button onclick="copiarLink()" id="btn-link" class="px-3 py-1.5 font-bold bg-slate-700 hover:bg-slate-600 rounded-lg">Copiar link</button>
+        <button onclick="gerarImagem()" id="btn-img" class="px-3 py-1.5 font-bold bg-[#25D366] hover:bg-[#1ea952] text-white rounded-lg">Gerar imagem para WhatsApp</button>
+        <button onclick="imprimir()" class="px-3 py-1.5 font-semibold text-slate-300 hover:text-white">PDF</button>
+      </div>
+    </div>
+  </div>
+  <div id="proposta-body" class="max-w-5xl mx-auto px-4 py-8"></div>
+</div>
+
+<!-- =========================================================
+     MODAL ADMIN
+     ========================================================= -->
+<div id="admin-modal" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex items-start justify-center p-4 overflow-y-auto">
+  <div class="bg-white rounded-2xl w-full max-w-4xl my-8">
+    <div class="p-5 border-b border-slate-200 flex justify-between items-center">
+      <div>
+        <h2 class="font-bold text-lg">Tabela de preços e regras</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Salvo neste navegador. Na versão web isso fica centralizado e só o admin edita.</p>
+      </div>
+      <button onclick="fecharAdmin()" class="text-slate-400 hover:text-red-500 text-2xl leading-none">&times;</button>
+    </div>
+    <div id="admin-body" class="p-5 space-y-6"></div>
+    <div class="p-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl flex justify-between items-center">
+      <button onclick="resetPricing()" class="text-xs font-semibold text-slate-500 hover:text-red-600">Restaurar padrão</button>
+      <div class="flex gap-2">
+        <button onclick="fecharAdmin()" class="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg">Cancelar</button>
+        <button onclick="salvarAdmin()" class="px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="img-modal" class="hidden fixed inset-0 bg-slate-900/80 z-50 overflow-y-auto no-print">
+  <div class="min-h-full flex flex-col items-center p-4">
+    <div class="w-full max-w-3xl bg-white rounded-2xl overflow-hidden my-4">
+      <div class="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold">Imagem da proposta</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Copie e cole direto na conversa do WhatsApp, ou baixe o arquivo.</p>
+        </div>
+        <button onclick="fecharImagem()" class="text-slate-400 hover:text-red-500 text-2xl leading-none">&times;</button>
+      </div>
+      <div class="p-4 bg-slate-100 max-h-[60vh] overflow-y-auto">
+        <img id="img-preview" alt="Prévia da proposta" class="w-full rounded-lg shadow">
+      </div>
+      <div class="p-4 border-t border-slate-200 flex flex-wrap gap-2 justify-end items-center">
+        <span id="img-aviso" class="text-xs text-slate-500 mr-auto"></span>
+        <button onclick="copiarImagem()" id="btn-copiar-img" class="px-4 py-2 text-sm font-bold text-white bg-[#25D366] hover:bg-[#1ea952] rounded-lg">Copiar imagem</button>
+        <button onclick="baixarImagem()" id="btn-baixar-img" class="px-4 py-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg">Baixar PNG</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   TABELA DE PREÇOS
+   Números marcados com confirmar:true ainda não têm fonte
+   independente. Aparecem sinalizados na tela de admin.
+   ========================================================= */
+const PRICING_PADRAO = {
+  planos: {
+    basic: { nome: 'Basic', mensal: 149.90, anual: 137.41 },
+    plus:  { nome: 'Plus',  mensal: 249.90, anual: 229.08 },
+    pro:   { nome: 'Pro',   mensal: 349.90, anual: 320.74 }
+  },
+  pacotes: {
+    nfe:          { rotulo: 'notas fiscais', unidade: 'notas',      opcoes: [ {qtd:50,preco:19.90}, {qtd:100,preco:29.90}, {qtd:200,preco:39.90} ] },
+    assinatura:   { rotulo: 'assinaturas',   unidade: 'documentos', opcoes: [ {qtd:250,preco:99.90}, {qtd:500,preco:199.90,confirmar:true}, {qtd:1000,preco:299.90} ] },
+    wppUtilidade: { rotulo: 'mensagens de confirmação', unidade: 'mensagens', opcoes: [ {qtd:300,preco:36.00,precoCheio:105.00} ] }
+  },
+  recorrentes: {
+    sia: { nome: 'SIA — prontuário por voz', preco: 39.90 },
+    secia: [ {atend:200, preco:179.90, precoPromo:50.00},
+             {atend:400, preco:279.90, precoPromo:100.00},
+             {atend:800, preco:449.90, precoPromo:150.00} ]
+  },
+  regras: {
+    msgsPorConsulta: 1,
+    // O crédito dos pacotes não expira (confirmado). Este teto não é mais
+    // sobre validade: é sobre desembolso. Sem ele o motor recomendaria o
+    // pacote de melhor preço unitário sempre — R$ 299,90 à vista para uma
+    // clínica que assina 10 documentos por mês, economizando R$ 1 ao mês.
+    capDuracaoMeses: 24,
+    nfeMinPlano: 'plus',
+    semiautoGratisApenasPro: true,
+    tetoPremioProPct: 30,
+    promoSeciaSoSemDesconto: true,
+    promoSeciaMeses: 4,
+    assinaturaIlimitadaPro: true
+  },
+  inclusos: [
+    { nome:'Migração dos dados do sistema atual', precoDe: 190.00, soSeMigracao: true },
+    { nome:'Treinamento da equipe e onboarding',  precoDe: 250.00 },
+    { nome:'Suporte durante todo o contrato',     precoDe: null }
+  ]
+};
+
+// Logo oficial, embutido: o ambiente de Artifact bloqueia imagem remota.
+const LOGO_SVG = `<svg aria-label="Simples Dental" viewBox="0 0 191 38" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M23.27 0C22.194 0 20.7263 0.592936 19.313 0.93395C17.9009 1.27312 15.9311 1.46974 14.351 1.45623C17.9256 3.33273 20.2606 5.76714 20.2606 5.76714C16.8817 3.67682 8.91527 0 5.49445 0C2.87788 0 0.00495784 2.14809 1.62479e-05 5.5484C-0.00677844 10.1751 2.11934 15.6928 2.95385 19.2609C4.5296 25.9982 4.08795 36.8228 8.09064 36.8228C12.404 36.8228 11.3051 22.2249 14.4097 22.2249C17.5136 22.2249 16.5519 37.4809 20.4539 37.4809C24.3559 37.4809 25.9125 18.8879 26.8211 15.9632C27.731 13.0378 28.7644 7.25593 28.7644 5.54779C28.7644 2.87804 26.6902 0 23.27 0Z" fill="#208BDF"/><path d="M37.5124 27.2416V25.7987C38.8233 26.6329 40.1512 27.05 41.4961 27.05C42.9261 27.05 44.0115 26.7564 44.752 26.169C45.4926 25.5732 45.8629 24.7432 45.8629 23.6792C45.8629 22.7429 45.6117 21.998 45.1095 21.4448C44.6158 20.883 43.539 20.1211 41.8791 19.1592C40.0235 18.0782 38.8488 17.1759 38.3551 16.4524C37.8614 15.7203 37.6145 14.8776 37.6145 13.9242C37.6145 12.6304 38.1168 11.5323 39.1212 10.63C40.1256 9.72772 41.4663 9.27657 43.1432 9.27657C44.2328 9.27657 45.3223 9.45958 46.4119 9.82561V11.1535C45.3394 10.6683 44.1945 10.4257 42.9772 10.4257C41.7344 10.4257 40.747 10.7407 40.015 11.3706C39.2914 12.0005 38.9297 12.8006 38.9297 13.771C38.9297 14.7074 39.1765 15.4522 39.6702 16.0055C40.1725 16.5588 41.2492 17.3121 42.9006 18.2655C44.6116 19.2358 45.7479 20.0998 46.3097 20.8574C46.8801 21.6065 47.1652 22.4705 47.1652 23.4494C47.1652 24.8539 46.6758 25.9988 45.6969 26.8841C44.7265 27.7693 43.3518 28.212 41.5727 28.212C40.9428 28.212 40.215 28.1141 39.3893 27.9183C38.5722 27.7225 37.9465 27.4969 37.5124 27.2416Z" fill="#208BDF"/><path d="M51.0121 11.5238C50.7567 11.5238 50.5311 11.4302 50.3353 11.2429C50.1396 11.0556 50.0417 10.8173 50.0417 10.5279C50.0417 10.247 50.1396 10.0214 50.3353 9.85115C50.5396 9.67239 50.7652 9.58301 51.0121 9.58301C51.2759 9.58301 51.5058 9.66813 51.7015 9.83838C51.9058 10.0086 52.008 10.2385 52.008 10.5279C52.008 10.8003 51.9101 11.0343 51.7143 11.2301C51.5185 11.4259 51.2844 11.5238 51.0121 11.5238ZM50.4375 27.8927V14.818H51.6122V27.8927H50.4375Z" fill="#208BDF"/><path d="M71.8024 27.8927V20.0275C71.8024 18.3846 71.5428 17.2312 71.0235 16.5673C70.5128 15.9033 69.6999 15.5713 68.5848 15.5713C67.5548 15.5713 66.6653 16.014 65.9162 16.8992C65.1672 17.7845 64.7926 18.8954 64.7926 20.2318V27.8927H63.6179V19.9381C63.6179 17.0269 62.5113 15.5713 60.2982 15.5713C59.2342 15.5713 58.3489 16.0182 57.6424 16.912C56.9359 17.7973 56.5826 18.9464 56.5826 20.3595V27.8927H55.4079V14.818H56.5826V16.9886H56.6337C57.5445 15.3287 58.8766 14.4988 60.6302 14.4988C61.5835 14.4988 62.3964 14.7755 63.0689 15.3287C63.7499 15.8735 64.2095 16.5928 64.4479 17.4866C64.8565 16.5417 65.4395 15.8097 66.1971 15.2904C66.9632 14.7627 67.7932 14.4988 68.6869 14.4988C71.547 14.4988 72.9771 16.2693 72.9771 19.8104V27.8927H71.8024Z" fill="#208BDF"/><path d="M77.7432 25.5689H77.6922V33.9066H76.5175V14.818H77.6922V17.5121H77.7432C78.2114 16.5502 78.8796 15.8097 79.7479 15.2904C80.6246 14.7627 81.5865 14.4988 82.6335 14.4988C84.2934 14.4988 85.5872 15.0734 86.5151 16.2225C87.4514 17.3632 87.9196 18.9166 87.9196 20.883C87.9196 23.0706 87.3833 24.8411 86.3108 26.1946C85.2467 27.5395 83.838 28.212 82.0845 28.212C80.1267 28.212 78.6796 27.3309 77.7432 25.5689ZM77.6922 20.7042V22.3513C77.6922 23.6622 78.105 24.7901 78.9307 25.7349C79.7564 26.6712 80.8417 27.1394 82.1866 27.1394C83.523 27.1394 84.6083 26.5691 85.4425 25.4285C86.2767 24.2793 86.6938 22.7727 86.6938 20.9085C86.6938 19.2741 86.3108 17.976 85.5447 17.0142C84.7786 16.0523 83.7571 15.5713 82.4803 15.5713C80.9566 15.5713 79.7777 16.0821 78.9435 17.1035C78.1093 18.125 77.6922 19.3252 77.6922 20.7042Z" fill="#208BDF"/><path d="M90.7832 27.8927V8.53601H91.9579V27.8927H90.7832Z" fill="#208BDF"/><path d="M96.0346 21.4065C96.0346 23.2025 96.4474 24.607 97.2731 25.62C98.1073 26.6329 99.2479 27.1394 100.695 27.1394C102.159 27.1394 103.589 26.5989 104.985 25.5178V26.7691C103.632 27.731 102.121 28.212 100.452 28.212C98.767 28.212 97.4051 27.6076 96.3666 26.3989C95.3281 25.1901 94.8088 23.4834 94.8088 21.2788C94.8088 19.372 95.3494 17.7675 96.4304 16.4651C97.52 15.1542 98.933 14.4988 100.669 14.4988C102.295 14.4988 103.542 15.0691 104.411 16.2098C105.279 17.3504 105.713 18.9081 105.713 20.883V21.4065H96.0346ZM104.487 20.3339C104.436 18.8273 104.074 17.6568 103.402 16.8226C102.729 15.9884 101.802 15.5713 100.618 15.5713C99.3927 15.5713 98.3754 15.9842 97.5668 16.8099C96.7666 17.627 96.2729 18.8017 96.0857 20.3339H104.487Z" fill="#208BDF"/><path d="M107.887 27.3182V25.9009C108.33 26.2839 108.866 26.5861 109.496 26.8074C110.126 27.0288 110.671 27.1394 111.13 27.1394C113.182 27.1394 114.207 26.301 114.207 24.6241C114.207 24.0452 113.982 23.5515 113.531 23.1429C113.08 22.7344 112.348 22.313 111.335 21.8789C110.083 21.3341 109.202 20.7723 108.692 20.1935C108.189 19.6061 107.938 18.8954 107.938 18.0612C107.938 16.9971 108.343 16.1374 109.151 15.482C109.968 14.8265 110.973 14.4988 112.165 14.4988C113.288 14.4988 114.25 14.7286 115.05 15.1883V16.5162C114.08 15.8863 113.075 15.5713 112.037 15.5713C111.177 15.5713 110.483 15.7969 109.956 16.2481C109.428 16.6907 109.164 17.2695 109.164 17.9845C109.164 18.6059 109.33 19.1124 109.662 19.504C109.994 19.887 110.726 20.3297 111.858 20.8319C113.22 21.4448 114.156 22.0151 114.667 22.5428C115.178 23.0621 115.433 23.7558 115.433 24.6241C115.433 25.6626 115.042 26.5223 114.259 27.2033C113.484 27.8757 112.411 28.212 111.041 28.212C109.781 28.212 108.73 27.914 107.887 27.3182Z" fill="#208BDF"/><path d="M118.501 27.8927V9.58301H123.787C130.537 9.58301 133.912 12.558 133.912 18.508C133.912 21.3341 132.976 23.6069 131.103 25.3263C129.231 27.0373 126.72 27.8927 123.57 27.8927H118.501ZM121.527 12.1622V25.3263H123.953C126.09 25.3263 127.75 24.739 128.933 23.5643C130.125 22.3896 130.72 20.7297 130.72 18.5847C130.72 14.303 128.503 12.1622 124.068 12.1622H121.527Z" fill="#208BDF"/><path d="M147.616 22.1598H138.704C138.738 23.3685 139.109 24.3006 139.815 24.956C140.53 25.6115 141.509 25.9392 142.752 25.9392C144.148 25.9392 145.429 25.5221 146.595 24.6879V27.0756C145.403 27.8246 143.829 28.1992 141.871 28.1992C139.947 28.1992 138.436 27.6076 137.338 26.4244C136.248 25.2327 135.704 23.56 135.704 21.4065C135.704 19.372 136.304 17.7164 137.504 16.4396C138.713 15.1542 140.211 14.5116 141.998 14.5116C143.786 14.5116 145.169 15.0861 146.148 16.2353C147.127 17.3844 147.616 18.9805 147.616 21.0234V22.1598ZM144.756 20.0658C144.748 19.0018 144.497 18.1761 144.003 17.5887C143.509 16.9929 142.828 16.695 141.96 16.695C141.109 16.695 140.385 17.0056 139.789 17.627C139.202 18.2484 138.84 19.0613 138.704 20.0658H144.756Z" fill="#208BDF"/><path d="M161.691 27.8927H158.728V20.5254C158.728 18.0824 157.864 16.8609 156.136 16.8609C155.234 16.8609 154.489 17.2014 153.902 17.8824C153.315 18.5549 153.021 19.4061 153.021 20.4361V27.8927H150.046V14.818H153.021V16.9886H153.072C154.051 15.3373 155.464 14.5116 157.311 14.5116C158.733 14.5116 159.818 14.9755 160.567 15.9033C161.316 16.8226 161.691 18.1548 161.691 19.8998V27.8927Z" fill="#208BDF"/><path d="M171.82 27.7523C171.241 28.0417 170.479 28.1864 169.534 28.1864C166.997 28.1864 165.729 26.9692 165.729 24.5347V17.1418H163.546V14.818H165.729V11.7919L168.691 10.9492V14.818H171.82V17.1418H168.691V23.6792C168.691 24.4538 168.832 25.0071 169.113 25.3391C169.394 25.6711 169.862 25.8371 170.517 25.8371C171.019 25.8371 171.454 25.6923 171.82 25.4029V27.7523Z" fill="#208BDF"/><path d="M184.017 27.8927H181.144V25.8498H181.093C180.191 27.4161 178.867 28.1992 177.122 28.1992C175.837 28.1992 174.828 27.8502 174.096 27.1522C173.372 26.4542 173.011 25.5306 173.011 24.3815C173.011 21.9129 174.432 20.4744 177.275 20.0658L181.157 19.5167C181.157 17.6526 180.271 16.7205 178.501 16.7205C176.943 16.7205 175.539 17.2568 174.287 18.3293V15.7373C175.666 14.9202 177.258 14.5116 179.063 14.5116C182.365 14.5116 184.017 16.1374 184.017 19.3891V27.8927ZM181.157 21.4703L178.412 21.8533C177.56 21.964 176.918 22.1726 176.484 22.479C176.058 22.7769 175.845 23.3047 175.845 24.0623C175.845 24.6156 176.041 25.071 176.432 25.4285C176.833 25.7775 177.365 25.952 178.028 25.952C178.931 25.952 179.676 25.637 180.263 25.0071C180.859 24.3687 181.157 23.5686 181.157 22.6067V21.4703Z" fill="#208BDF"/><path d="M190.226 27.8927H187.251V8.53601H190.226V27.8927Z" fill="#208BDF"/></svg>`;
+
+const ORDEM_PLANOS = ['basic','plus','pro'];
+let PRICING = carregarPricing();
+
+function carregarPricing(){
+  try {
+    const raw = localStorage.getItem('sd_pricing_v10');
+    if(raw) return JSON.parse(raw);
+  } catch(e){}
+  return JSON.parse(JSON.stringify(PRICING_PADRAO));
+}
+function salvarPricing(){
+  try { localStorage.setItem('sd_pricing_v10', JSON.stringify(PRICING)); } catch(e){}
+}
+
+/* =========================================================
+   FORMATAÇÃO
+   ========================================================= */
+const brl = v => 'R$ ' + new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
+const num = v => new Intl.NumberFormat('pt-BR').format(v||0);
+function dataBR(iso){ if(!iso) return ''; const p=iso.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
+function dataFutura(dias){ const d=new Date(); d.setDate(d.getDate()+dias); return d.toISOString().split('T')[0]; }
+function mesesTexto(m){
+  if(m>=11.5) return 'cerca de ' + Math.round(m/12*10)/10 + ' ' + (m>=23 ? 'anos' : 'ano');
+  if(m<1.05) return 'cerca de 1 mês';
+  return 'cerca de ' + (m<3 ? (Math.round(m*10)/10).toString().replace('.',',') : Math.round(m)) + ' meses';
+}
+
+/* =========================================================
+   MOTOR — dimensionamento de pacote
+   Escolhe o pacote de melhor preço unitário cuja duração
+   não passe do teto configurado. Se nenhum couber (volume
+   muito baixo), cai no menor pacote disponível.
+   ========================================================= */
+function dimensionar(volumeMes, grupo, capMeses){
+  if(!volumeMes || volumeMes<=0) return null;
+  const opcoes = grupo.opcoes;
+  const porUnitario = [...opcoes].sort((a,b)=> (a.preco/a.qtd) - (b.preco/b.qtd));
+  const cabem = porUnitario.filter(p => (p.qtd/volumeMes) <= capMeses);
+  const esc = cabem[0] || [...opcoes].sort((a,b)=> a.qtd-b.qtd)[0];
+  const duracao = esc.qtd / volumeMes;
+  return {
+    qtd: esc.qtd,
+    preco: esc.preco,
+    precoCheio: esc.precoCheio || null,
+    duracaoMeses: duracao,
+    // Nenhum pacote cabe no teto: mesmo o menor rende mais meses que o
+    // horizonte. Não se perde crédito, mas é bom o vendedor saber.
+    excedeuTeto: duracao > capMeses,
+    mensalEquivalente: esc.preco / duracao,
+    unitario: esc.preco / esc.qtd,
+    unidade: grupo.unidade,
+    rotulo: grupo.rotulo,
+    volumeMes: volumeMes
+  };
+}
+
+// O WhatsApp Web sem custo de mensagem é exclusivo do Pro.
+function semiautoGratis(planoKey, regras){
+  return !regras.semiautoGratisApenasPro || planoKey === 'pro';
+}
+
+function atendePlano(planoKey, minimo){
+  return ORDEM_PLANOS.indexOf(planoKey) >= ORDEM_PLANOS.indexOf(minimo);
+}
+
+/* =========================================================
+   MOTOR — monta o cenário de um plano
+   ========================================================= */
+function calcularPlano(planoKey, r, P){
+  const g = P.regras;
+  const plano = P.planos[planoKey];
+  const valorPlano = plano[r.frequencia];
+  const linhas = [];
+  const bloqueios = [];
+
+  const d = r.desconto;
+  const temDesc = d && d.tipo !== 'nenhum' && (d.meses||0) > 0;
+  let planoNaPromo = valorPlano;
+  if(temDesc){
+    if(d.tipo === 'gratis') planoNaPromo = 0;
+    else if(d.tipo === 'percentual') planoNaPromo = valorPlano * (1 - (d.valor||0)/100);
+  }
+  const janela = temDesc ? `${d.meses} ${d.meses>1?'meses':'mês'}` : '';
+  linhas.push({ chave:'plano', nome:`Plano ${plano.nome}`, tipo:'plano', mensal: valorPlano,
+                promoValor: temDesc ? planoNaPromo : null,
+                promoMeses: temDesc ? d.meses : 0,
+                promoTexto: !temDesc ? null
+                  : (d.tipo === 'gratis' ? `Primeiros ${janela} sem cobrança da mensalidade`
+                                         : `${d.valor}% de desconto nos primeiros ${janela}`),
+                detalhe: r.frequencia==='anual' ? 'Mensalidade do plano anual, 12x' : 'Mensalidade do plano' });
+
+  // --- Confirmação de consulta ---
+  const msgs = Math.round((r.consultasMes||0) * g.msgsPorConsulta);
+  if(r.confirmacao === 'automatica' && msgs > 0){
+    if(semiautoGratis(planoKey, g)){
+      // Pro: o padrão é o WhatsApp Web, sem pacote de mensagem.
+      linhas.push({ chave:'confirmacao', nome:'Confirmação pelo WhatsApp Web', tipo:'incluso', mensal:0,
+                    detalhe:'Padrão deste plano — a secretária confirma com um clique, sem pacote de mensagem' });
+      if(r.mostrarAutomaticaNoPro){
+        // Mostrada como opcional: não entra no total, aparece como acréscimo.
+        const p = dimensionar(msgs, P.pacotes.wppUtilidade, g.capDuracaoMeses);
+        linhas.push({ chave:'confirmacao_opcional', nome:'Confirmação 100% automática (opcional)', tipo:'opcional',
+                      pacote:p, mensal:0, valorOpcional:p.mensalEquivalente });
+      }
+    } else {
+      const p = dimensionar(msgs, P.pacotes.wppUtilidade, g.capDuracaoMeses);
+      linhas.push({ chave:'confirmacao', nome:'Confirmação automática de consulta', tipo:'pacote', pacote:p, mensal:p.mensalEquivalente });
+    }
+  } else if(r.confirmacao === 'semiautomatica' && msgs > 0){
+    if(semiautoGratis(planoKey, g)){
+      linhas.push({ chave:'confirmacao', nome:'Confirmação pelo WhatsApp Web', tipo:'incluso', mensal:0,
+                    detalhe:'Sem custo de mensagem neste plano' });
+    } else {
+      const p = dimensionar(msgs, P.pacotes.wppUtilidade, g.capDuracaoMeses);
+      linhas.push({ chave:'confirmacao', nome:'Confirmação de consulta', tipo:'pacote', pacote:p, mensal:p.mensalEquivalente });
+    }
+  }
+
+  // --- NF-e ---
+  if((r.notasMes||0) > 0){
+    if(!atendePlano(planoKey, g.nfeMinPlano)){
+      bloqueios.push(`Emissão de nota fiscal não está disponível no ${plano.nome}`);
+    } else {
+      const p = dimensionar(r.notasMes, P.pacotes.nfe, g.capDuracaoMeses);
+      linhas.push({ chave:'nfe', nome:'Emissão de nota fiscal', tipo:'pacote', pacote:p, mensal:p.mensalEquivalente });
+    }
+  }
+
+  // --- Assinatura eletrônica ---
+  if(r.assinatura === 'digital' && (r.documentosMes||0) > 0){
+    if(planoKey === 'pro' && g.assinaturaIlimitadaPro){
+      linhas.push({ chave:'assinatura', nome:'Assinatura eletrônica ilimitada', tipo:'incluso', mensal:0,
+                    detalhe:'Sem limite e sem pacote neste plano' });
+    } else {
+      const p = dimensionar(r.documentosMes, P.pacotes.assinatura, g.capDuracaoMeses);
+      linhas.push({ chave:'assinatura', nome:'Assinatura eletrônica', tipo:'pacote', pacote:p, mensal:p.mensalEquivalente });
+    }
+  }
+
+  // --- Add-ons opcionais ---
+  if(r.sia){
+    linhas.push({ chave:'sia', nome:P.recorrentes.sia.nome, tipo:'recorrente', mensal:P.recorrentes.sia.preco, detalhe:'Valor fixo mensal' });
+  }
+  if(r.seciaAtend){
+    const t = P.recorrentes.secia.find(x=> x.atend === Number(r.seciaAtend));
+    if(t){
+      // A promoção da SEC IA exige o plano sem desconto. A trava é aqui, no
+      // motor — esconder o campo na tela não bastaria.
+      const promoLiberada = t.precoPromo != null &&
+        (!g.promoSeciaSoSemDesconto || !temDesc);
+      const usaPromo = r.seciaPromo && promoLiberada;
+      const pct = r.seciaDescPct || 0;
+
+      let promoValor = null, promoMeses = 0, promoTexto = null, detalhe = 'Valor fixo mensal';
+      if(usaPromo){
+        promoMeses = g.promoSeciaMeses || 0;
+        promoValor = t.precoPromo;
+        promoTexto = `Condição especial nos primeiros ${promoMeses} ${promoMeses>1?'meses':'mês'}`;
+        detalhe = 'Exige o plano contratado sem desconto na mensalidade';
+      } else if(pct > 0 && (r.seciaDescMeses||0) > 0){
+        promoMeses = r.seciaDescMeses;
+        promoValor = t.preco * (1 - pct/100);
+        promoTexto = `${pct}% de desconto nos primeiros ${promoMeses} ${promoMeses>1?'meses':'mês'}`;
+      }
+      linhas.push({ chave:'secia', nome:`SEC IA — até ${num(t.atend)} atendimentos/mês`,
+                    tipo:'recorrente', mensal:t.preco, promoValor, promoMeses, promoTexto, detalhe,
+                    promoBloqueada: !!r.seciaPromo && !promoLiberada });
+    }
+  }
+
+  // --- Totais e rampa de 12 meses ---
+  const totalMensal = linhas.reduce((s,l)=> s + (l.tipo==='opcional' ? 0 : (l.mensal||0)), 0);
+  const rampa = calcularRampa(linhas);
+  const totalAno = rampa.meses.reduce((s,v)=> s+v, 0);
+  const totalAnoSemDesconto = totalMensal * 12;
+
+  // Os pacotes não mudam com a frequência nem com o desconto do plano,
+  // então as três vitrines de preço só trocam a parcela do plano.
+  const somaPacotes = totalMensal - valorPlano;
+  // O total exibido é o do mês 1 — fecha com a soma da coluna, onde cada linha
+  // mostra o valor promocional. O "depois" é o regime normal.
+  const totalExibido = rampa.meses[0];
+  const temPromo = linhas.some(l => (l.promoMeses||0) > 0);
+  const totalDepois = temPromo ? totalMensal : null;
+  const planoComDesconto = rampa.meses[0] - somaPacotes;
+  const vitrine = {
+    cheio: plano.mensal + somaPacotes,
+    anual: plano.anual + somaPacotes,
+    desconto: (r.desconto && r.desconto.tipo !== 'nenhum' && (r.desconto.meses||0) > 0)
+      ? { valor: planoComDesconto + somaPacotes, meses: r.desconto.meses }
+      : null
+  };
+
+  // Acréscimo opcional (automática no Pro): fica fora do total e aparece à parte.
+  const opc = linhas.find(l => l.chave === 'confirmacao_opcional');
+  const opcional = opc ? { valor: opc.valorOpcional, total: totalMensal + opc.valorOpcional } : null;
+
+  return {
+    planoKey, nome:plano.nome, valorPlano, linhas, bloqueios,
+    atende: bloqueios.length === 0,
+    totalMensal, totalAno, somaPacotes, vitrine, opcional, totalExibido, totalDepois,
+    temDesc: temPromo,
+    descontoAno: totalAnoSemDesconto - totalAno,
+    rampa
+  };
+}
+
+// Soma mês a mês respeitando o prazo de cada linha promocional. Linhas
+// opcionais ficam fora — elas não entram no total.
+function calcularRampa(linhas){
+  const meses = [];
+  for(let m=1; m<=12; m++){
+    meses.push(linhas.reduce((soma, l) => {
+      if(l.tipo === 'opcional') return soma;
+      const naJanela = (l.promoMeses||0) > 0 && m <= l.promoMeses;
+      return soma + (naJanela ? l.promoValor : (l.mensal||0));
+    }, 0));
+  }
+  const grupos = [];
+  let atual = { ini:1, fim:1, valor:meses[0] };
+  for(let m=2; m<=12; m++){
+    if(Math.abs(meses[m-1] - atual.valor) < 0.01) atual.fim = m;
+    else { grupos.push(atual); atual = { ini:m, fim:m, valor:meses[m-1] }; }
+  }
+  grupos.push(atual);
+  return { meses, grupos, temVariacao: grupos.length > 1 };
+}
+
+function calcularTodos(r, P){
+  const cenarios = ORDEM_PLANOS.map(k => calcularPlano(k, r, P));
+  const validos = cenarios.filter(c => c.atende);
+  if(!validos.length) return { cenarios, recomendado:'pro', maisBarato:null, premioPro:null };
+
+  const maisBarato = validos.reduce((a,b)=> b.totalMensal < a.totalMensal ? b : a);
+  const pro = validos.find(c => c.planoKey === 'pro');
+
+  // O Pro é a recomendação padrão. Só cede quando fica desproporcional
+  // frente ao plano mais barato que também atende.
+  let recomendado = maisBarato.planoKey;
+  let premioPro = null;
+  if(pro){
+    premioPro = maisBarato.totalMensal > 0
+      ? ((pro.totalMensal - maisBarato.totalMensal) / maisBarato.totalMensal) * 100
+      : 0;
+    if(premioPro <= (P.regras.tetoPremioProPct ?? 30)) recomendado = 'pro';
+  }
+  return { cenarios, recomendado, maisBarato, premioPro };
+}
+
+/* =========================================================
+   LEITURA DO FORMULÁRIO
+   ========================================================= */
+const OPCOES_CONFIRMACAO = [
+  { v:'automatica',     t:'Automática',     d:'O sistema envia a confirmação e o lembrete sozinho' },
+  { v:'semiautomatica', t:'Semiautomática pelo WhatsApp Web', d:'A secretária dispara com um clique — sem custo de mensagem no Pro' },
+  { v:'nenhuma',        t:'Não quero confirmar por mensagem', d:'A clínica segue ligando ou não confirma' }
+];
+const OPCOES_ASSINATURA = [
+  { v:'digital', t:'Quero assinar digitalmente', d:'Anamnese, evolução e contrato assinados pelo paciente no celular' },
+  { v:'papel',   t:'Prefiro continuar no papel', d:'Sem assinatura eletrônica na proposta' }
+];
+
+function lerFormulario(){
+  const tipo = val('q-desc-tipo');
+  return {
+    cliente: val('q-cliente'),
+    vendedor: val('q-vendedor'),
+    consultasMes: numVal('q-consultas'),
+    confirmacao: radioVal('q-confirmacao') || 'semiautomatica',
+    notasMes: numVal('q-notas'),
+    assinatura: radioVal('q-assinatura') || 'digital',
+    documentosMes: numVal('q-documentos'),
+    migracao: document.getElementById('q-migracao').checked,
+    mostrarAutomaticaNoPro: document.getElementById('q-manter-automatica').checked,
+    sia: document.getElementById('q-sia').checked,
+    seciaAtend: val('q-secia'),
+    seciaPromo: document.getElementById('q-secia-promo').checked,
+    seciaDescPct: numVal('q-secia-desc'),
+    seciaDescMeses: numVal('q-secia-desc-meses'),
+    comparar: val('q-comparar').split(','),
+    frequencia: val('q-frequencia'),
+    validade: val('q-validade'),
+    desconto: { tipo, valor: numVal('q-desc-valor'), meses: numVal('q-desc-meses') }
+  };
+}
+const val = id => (document.getElementById(id)?.value || '').trim();
+const numVal = id => parseFloat(document.getElementById(id)?.value) || 0;
+const radioVal = name => { const el = document.querySelector(`input[name="${name}"]:checked`); return el ? el.value : null; };
+
+/* =========================================================
+   RENDER — prévia do vendedor
+   ========================================================= */
+function renderRadios(containerId, opcoes, selecionado){
+  const c = document.getElementById(containerId);
+  c.innerHTML = opcoes.map(o => `
+    <label class="flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${o.v===selecionado ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}">
+      <input type="radio" name="${containerId}" value="${o.v}" ${o.v===selecionado?'checked':''} class="mt-0.5 w-4 h-4 text-blue-600">
+      <span>
+        <span class="block text-sm font-semibold text-slate-800">${o.t}</span>
+        <span class="block text-[11px] text-slate-500 leading-snug">${o.d}</span>
+      </span>
+    </label>`).join('');
+  c.querySelectorAll('input').forEach(i => i.addEventListener('change', atualizar));
+}
+
+function renderPreview(res, r){
+  const alvo = document.getElementById('preview-vendedor');
+  const par = (r.comparar && r.comparar.length === 2) ? r.comparar : ['plus','pro'];
+  const destaque = recomendadoNoPar(res, par, PRICING);
+  const cards = res.cenarios.map((c,i) => {
+    const rec = c.planoKey === destaque;
+    const naProposta = par.includes(c.planoKey);
+    return `
+    <div class="bg-white rounded-2xl border ${rec?'border-blue-500 ring-1 ring-blue-500':'border-slate-200'} p-4 ${c.atende?'':'opacity-60'} ${naProposta?'':'opacity-50 grayscale'}">
+      <div class="flex items-baseline justify-between mb-3">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${i+1}. Plano</p>
+          <h3 class="font-black text-lg">${c.nome}</h3>
+          ${naProposta ? '<span class="text-[9px] font-black uppercase text-emerald-700">na proposta</span>' : '<span class="text-[9px] font-bold uppercase text-slate-400">fora da proposta</span>'}
+        </div>
+        ${rec ? '<span class="text-[9px] font-black uppercase bg-blue-600 text-white px-2 py-1 rounded">Recomendado</span>' : ''}
+        ${!c.atende ? '<span class="text-[9px] font-black uppercase bg-red-100 text-red-700 px-2 py-1 rounded">Não atende</span>' : ''}
+      </div>
+      ${c.bloqueios.map(b=>`<p class="text-[11px] text-red-600 font-semibold mb-2">${b}</p>`).join('')}
+      <table class="w-full text-[11px] mb-3">
+        ${c.linhas.map(l=>`
+          <tr class="border-b border-slate-100 last:border-0">
+            <td class="py-1.5 pr-2 text-slate-600">${l.nome}${l.tipo==='pacote'?`<span class="block text-[10px] text-slate-400">pacote ${num(l.pacote.qtd)} · ${brl(l.pacote.preco)} · ${mesesTexto(l.pacote.duracaoMeses)}</span>${l.pacote.excedeuTeto?`<span class="block text-[10px] font-bold text-amber-700 mt-0.5">⚠ neste volume até o menor pacote dura ${mesesTexto(l.pacote.duracaoMeses)} — não expira, mas é muito crédito de uma vez</span>`:''}`:''}</td>
+            <td class="py-1.5 text-right font-bold whitespace-nowrap ${l.mensal===0?'text-emerald-600':'text-slate-800'}">${l.mensal===0?'incluso':brl(l.mensal)+'/mês'}</td>
+          </tr>`).join('')}
+      </table>
+      <div class="border-t-2 border-slate-800 pt-2 flex justify-between items-baseline">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">${c.temDesc?'Na promoção':'Total por mês'}</span>
+        <span class="font-black text-lg">${brl(c.totalExibido)}</span>
+      </div>
+      <div class="mt-2 space-y-0.5 text-[10px] text-slate-500">
+        ${c.totalDepois?`<div class="flex justify-between"><span>Depois da promoção</span><span class="font-semibold">${brl(c.totalDepois)}</span></div>`:''}
+        <div class="flex justify-between"><span>Cheio, sem desconto</span><span class="font-semibold">${brl(c.totalMensal)}</span></div>
+        ${c.descontoAno>0.01?`<div class="flex justify-between text-amber-700"><span>Desconto concedido em 12 meses</span><span class="font-bold">− ${brl(c.descontoAno)}</span></div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const msgs = Math.round(r.consultasMes * PRICING.regras.msgsPorConsulta);
+  alvo.innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">${cards}</div>
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 text-xs text-slate-600">
+      ${(() => {
+        const t = PRICING.recorrentes.secia.find(x => x.atend === Number(r.seciaAtend));
+        const temDescPlano = r.desconto.tipo !== 'nenhum' && (r.desconto.meses||0) > 0;
+        if(!t || t.precoPromo == null || !temDescPlano) return '';
+        const porMes = t.preco - t.precoPromo;
+        const mesesPromo = PRICING.regras.promoSeciaMeses || 0;
+        const valorPromo = porMes * mesesPromo;
+        const rec = res.cenarios.find(c => c.planoKey === destaque);
+        const descPlano = rec ? rec.descontoAno : 0;
+        return `<div class="mb-2 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+          <b>O desconto no plano está cancelando a condição especial da SEC IA.</b><br>
+          Desconto que você está dando na mensalidade: <b>${brl(descPlano)}</b>.<br>
+          Condição da SEC IA que isso cancela: <b>${brl(porMes)}/mês por ${mesesPromo} ${mesesPromo>1?'meses':'mês'}</b> = ${brl(valorPromo)}.
+          ${valorPromo > descPlano
+            ? `<br><b>A condição da SEC IA vale ${(valorPromo/(descPlano||1)).toFixed(1).replace('.',',')}x mais.</b> Considere zerar o desconto do plano.`
+            : '<br>Neste caso o desconto no plano vale mais que a condição da SEC IA.'}
+        </div>`;
+      })()}
+      <p class="font-bold text-slate-800 mb-2">Como o motor dimensionou</p>
+      ${res.premioPro !== null ? `<p class="mb-2 px-2.5 py-1.5 rounded-lg ${res.recomendado==='pro'?'bg-blue-50 text-blue-900':'bg-amber-50 text-amber-900'}">
+        Pro está <b>${res.premioPro<=0 ? 'mais barato' : Math.round(res.premioPro)+'% acima'}</b> do plano mais barato que atende (${res.maisBarato.nome}).
+        Teto para recomendar o Pro: ${PRICING.regras.tetoPremioProPct}% — ${res.recomendado==='pro'?'dentro do teto, Pro recomendado':'acima do teto, recomendação caiu para o '+res.maisBarato.nome}.
+      </p>` : ''}
+      <ul class="space-y-1">
+        <li><b>${num(r.consultasMes)}</b> consultas/mês × ${PRICING.regras.msgsPorConsulta} mensagens = <b>${num(msgs)}</b> mensagens de confirmação por mês</li>
+        <li><b>${num(r.notasMes)}</b> notas fiscais/mês</li>
+        <li><b>${r.assinatura==='digital' ? num(r.documentosMes)+' documentos/mês para assinar' : 'documentos no papel — sem assinatura eletrônica'}</b></li>
+        <li>Crédito máximo a recomendar: <b>${PRICING.regras.capDuracaoMeses} meses</b> — o crédito não expira, o teto existe só para não pedir um desembolso grande demais</li>
+      </ul>
+    </div>`;
+}
+
+/* =========================================================
+   RENDER — proposta do cliente
+   ========================================================= */
+function linhaProposta(l){
+  const comPromo = (l.promoMeses||0) > 0;
+  if(l.tipo === 'plano'){
+    return `<div class="flex items-start justify-between gap-3 py-2.5 border-b border-slate-100">
+      <div>
+        <p class="text-sm font-bold text-slate-900">${l.nome}</p>
+        <p class="text-[11px] text-slate-500">${l.detalhe||''}</p>
+        ${comPromo?`<p class="text-[11px] font-semibold text-blue-700 mt-0.5">${l.promoTexto}</p>`:''}
+      </div>
+      <div class="text-right whitespace-nowrap">
+        ${comPromo?`<p class="text-[11px] text-slate-400 line-through">${brl(l.mensal)}</p>`:''}
+        <p class="text-sm font-black ${comPromo?'text-blue-700':'text-slate-900'}">${brl(comPromo ? l.promoValor : l.mensal)}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
+      </div>
+    </div>`;
+  }
+  if(l.tipo === 'incluso'){
+    return `<div class="flex items-start justify-between gap-3 py-2.5 border-b border-slate-100">
+      <div><p class="text-sm font-semibold text-slate-800">${l.nome}</p>
+      <p class="text-[11px] text-emerald-700">${l.detalhe||''}</p></div>
+      <p class="text-sm font-black text-emerald-600 whitespace-nowrap">Incluso</p></div>`;
+  }
+  if(l.tipo === 'opcional'){
+    const p = l.pacote;
+    return `<div class="py-2.5 border-b border-slate-100">
+      <div class="flex items-start justify-between gap-3">
+        <p class="text-sm font-semibold text-slate-600">${l.nome}</p>
+        <p class="text-sm font-bold text-slate-500 whitespace-nowrap">+ ${brl(l.valorOpcional)}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
+      </div>
+      <div class="mt-1.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-2 text-[11px] text-slate-500 leading-relaxed">
+        Se preferir que o sistema envie sozinho, sem ninguém clicar: pacote de <b>${num(p.qtd)} mensagens por ${brl(p.preco)}</b>,
+        que dura <b>${mesesTexto(p.duracaoMeses)}</b> no seu volume. Não está somado no valor abaixo.
+      </div>
+    </div>`;
+  }
+  if(l.tipo === 'pacote'){
+    const p = l.pacote;
+    return `<div class="py-2.5 border-b border-slate-100">
+      <div class="flex items-start justify-between gap-3">
+        <p class="text-sm font-semibold text-slate-800">${l.nome}</p>
+        <p class="text-sm font-black text-slate-900 whitespace-nowrap">${brl(l.mensal)}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
+      </div>
+      <div class="mt-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[11px] text-slate-600 leading-relaxed">
+        Você usa cerca de <b>${num(p.volumeMes)} ${p.unidade}</b> por mês.
+        Compra um pacote de <b>${num(p.qtd)} ${p.unidade} por ${brl(p.preco)}</b>${p.precoCheio ? ` <span class="line-through text-slate-400">${brl(p.precoCheio)}</span>` : ''},
+        que dura <b>${mesesTexto(p.duracaoMeses)}</b>.
+        Diluído no tempo, isso é <b>${brl(p.mensal ?? p.mensalEquivalente)} por mês</b>.
+      </div>
+    </div>`;
+  }
+  return `<div class="flex items-start justify-between gap-3 py-2.5 border-b border-slate-100">
+    <div>
+      <p class="text-sm font-semibold text-slate-800">${l.nome}</p>
+      <p class="text-[11px] text-slate-500">${l.detalhe||''}</p>
+      ${comPromo?`<p class="text-[11px] font-semibold text-blue-700 mt-0.5">${l.promoTexto}</p>`:''}
+    </div>
+    <div class="text-right whitespace-nowrap">
+      ${comPromo?`<p class="text-[11px] text-slate-400 line-through">${brl(l.mensal)}</p>`:''}
+      <p class="text-sm font-black ${comPromo?'text-blue-700':'text-slate-900'}">${brl(comPromo ? l.promoValor : l.mensal)}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
+    </div></div>`;
+}
+
+// O destaque tem que cair dentro do par que foi para a proposta. Mesma regra
+// do motor, mas restrita aos dois planos escolhidos: prefere o de cima,
+// cedendo para o mais barato quando a diferença passa do teto.
+function recomendadoNoPar(res, par, P){
+  const elegiveis = par
+    .map(k => res.cenarios.find(c => c.planoKey === k))
+    .filter(c => c && c.atende);
+  if(!elegiveis.length) return null;
+  if(elegiveis.length === 1) return elegiveis[0].planoKey;
+
+  const ordenados = [...elegiveis].sort((a,b)=> ORDEM_PLANOS.indexOf(a.planoKey) - ORDEM_PLANOS.indexOf(b.planoKey));
+  const baixo = ordenados[0], alto = ordenados[ordenados.length-1];
+  const premio = baixo.totalMensal > 0
+    ? ((alto.totalMensal - baixo.totalMensal) / baixo.totalMensal) * 100
+    : 0;
+  return premio <= (P.regras.tetoPremioProPct ?? 30) ? alto.planoKey : baixo.planoKey;
+}
+
+// Evita dar ao cliente a impressão de que o contrato acaba no mês 12.
+function rotuloGrupo(g, ultimo){
+  if(ultimo && g.fim >= 12) return g.ini >= 12 ? 'Do mês 12 em diante' : `Do mês ${g.ini} em diante`;
+  return g.ini === g.fim ? `Mês ${g.ini}` : `Meses ${g.ini} a ${g.fim}`;
+}
+
+function renderProposta(dados){
+  const { r, res, P, validade } = dados;
+  const alvo = document.getElementById('proposta-body');
+
+  const resumo = [];
+  if(r.consultasMes) resumo.push(`${num(r.consultasMes)} consultas`);
+  if(r.notasMes) resumo.push(`${num(r.notasMes)} notas fiscais`);
+  if(r.assinatura==='digital' && r.documentosMes) resumo.push(`${num(r.documentosMes)} documentos`);
+  if(resumo.length) resumo[resumo.length-1] += ' por mês';
+
+  // Só os dois planos escolhidos pelo vendedor entram na proposta.
+  const par = (r.comparar && r.comparar.length === 2) ? r.comparar : ['plus','pro'];
+  const destaque = recomendadoNoPar(res, par, P);
+  const cards = par.map(k => {
+    const c = res.cenarios.find(x => x.planoKey === k);
+    const rec = c.planoKey === destaque;
+    if(!c.atende){
+      return `<div class="print-break bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden h-full">
+        <div class="bg-slate-200 text-slate-600 text-center text-[10px] font-black uppercase tracking-widest py-1.5">Não atende ao que você precisa</div>
+        <div class="p-5">
+          <h3 class="font-black text-2xl tracking-tight text-slate-400">${c.nome}</h3>
+          <div class="mt-3 space-y-1">${c.bloqueios.map(b=>`<p class="text-xs text-slate-500">${b}</p>`).join('')}</div>
+        </div>
+      </div>`;
+    }
+    return `<div class="print-break bg-white rounded-2xl border-2 ${rec?'border-blue-600':'border-slate-200'} overflow-hidden flex flex-col h-full">
+      ${rec?'<div class="bg-blue-600 text-white text-center text-[10px] font-black uppercase tracking-widest py-1.5">Melhor escolha para a sua clínica</div>'
+           :'<div class="bg-slate-100 text-slate-500 text-center text-[10px] font-black uppercase tracking-widest py-1.5">Alternativa</div>'}
+      <div class="p-5 flex flex-col flex-1">
+        <h3 class="font-black text-2xl tracking-tight">${c.nome}</h3>
+        <div class="mt-3 flex-1">${c.linhas.map(linhaProposta).join('')}</div>
+
+        <div class="mt-4 bg-slate-900 text-white rounded-xl p-4 text-center">
+          <p class="text-[10px] uppercase tracking-widest text-slate-400">Total por mês</p>
+          <p class="text-3xl font-black leading-tight mt-0.5">${brl(c.totalExibido)}<span class="text-base font-medium text-slate-400">/mês</span></p>
+          <p class="text-[10px] text-slate-400 mt-1">Mensalidade + os pacotes que você vai usar</p>
+          ${c.opcional?`
+          <div class="mt-2.5 pt-2.5 border-t border-white/15">
+            <p class="text-[10px] text-slate-300 leading-snug">Com a confirmação 100% automática:</p>
+            <p class="text-lg font-black text-white leading-tight">${brl(c.opcional.total + (c.totalExibido - c.totalMensal))}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
+          </div>`:''}
+        </div>
+
+        ${c.rampa.temVariacao ? `
+        <div class="mt-3 bg-blue-50 border border-blue-100 rounded-xl p-3">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-blue-800 mb-1.5">Como fica mês a mês</p>
+          ${c.rampa.grupos.map((g,gi)=>`<div class="flex justify-between text-[11px] font-semibold text-slate-700"><span>${rotuloGrupo(g, gi === c.rampa.grupos.length-1)}</span><span class="text-blue-700">${brl(g.valor)}</span></div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const inclusos = P.inclusos.filter(x => !x.soSeMigracao || r.migracao);
+  const totalInclusos = inclusos.reduce((sum,x)=> sum + (x.precoDe||0), 0);
+
+  alvo.innerHTML = `
+    <div class="print-break print-tight bg-white rounded-2xl border border-slate-200 p-6 mb-5">
+      <div class="cap-cabecalho flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <div class="mb-2.5" style="height:26px">${LOGO_SVG}</div>
+          <h1 class="text-2xl font-black tracking-tight leading-none">Proposta para ${r.cliente || 'sua clínica'}</h1>
+          ${resumo.length?`<p class="text-xs text-slate-500 mt-1.5">${resumo.join(' · ')}</p>`:''}
+        </div>
+        ${r.vendedor?`<p class="text-[11px] text-slate-500">Vendedor: <span class="font-semibold text-slate-700">${r.vendedor}</span></p>`:''}
+      </div>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-5 print-break print-tight">
+      <p class="font-bold text-blue-900 text-sm mb-1.5">Como ler esta proposta</p>
+      <p class="text-xs text-blue-900/80 leading-relaxed print-mini">
+        O plano é um valor fixo por mês. Nota fiscal, assinatura eletrônica e mensagens de confirmação funcionam
+        por pacote: você compra o crédito uma vez e consome conforme o uso. Por isso cada pacote mostra
+        <b>quanto custa na compra</b>, <b>quanto dura no seu volume</b> e <b>quanto representa por mês</b> —
+        é esse último número que entra no total.
+      </p>
+    </div>
+
+    <div class="dois-planos grid grid-cols-1 md:grid-cols-2 gap-5 mb-5 items-stretch">${cards}</div>
+
+    <div class="print-break print-tight bg-white rounded-2xl border border-slate-200 p-6 mb-5">
+      <p class="font-bold text-slate-900 mb-1">Incluso em qualquer plano, sem cobrança</p>
+      <p class="text-xs text-slate-500 mb-4">Não é cortesia temporária — faz parte do contrato do primeiro ao último dia.</p>
+      <div class="cap-inclusos grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        ${inclusos.map(x=>`<div class="flex items-start justify-between gap-2 border border-slate-100 rounded-lg px-3 py-2">
+          <span class="text-sm text-slate-700 leading-snug">${x.nome}</span>
+          <span class="text-right whitespace-nowrap">
+            ${x.precoDe?`<span class="block text-[11px] text-slate-400 line-through">${brl(x.precoDe)}</span>`:''}
+            <span class="block text-sm font-black text-emerald-600">${x.precoDe?'R$ 0,00':'Incluso'}</span>
+          </span></div>`).join('')}
+      </div>
+      ${totalInclusos>0?`<p class="text-xs text-slate-600 mt-3">Valor de tabela desses serviços: <b class="line-through text-slate-400">${brl(totalInclusos)}</b> — você não paga nada por eles.</p>`:''}
+    </div>
+
+    ${r.frequencia==='anual' ? `
+    <div class="print-break bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-5">
+      <p class="font-bold text-emerald-900 text-sm">Você escolheu o contrato anual</p>
+      <p class="text-xs text-emerald-900/80 mt-1">No anual o valor do plano é dividido em 12 parcelas menores: na prática, você paga 11 meses e o 12º é por nossa conta.</p>
+    </div>` : ''}
+
+    <p class="print-rodape text-center text-[11px] text-slate-400 mt-8">
+      Proposta gerada em ${dataBR(new Date().toISOString().split('T')[0])} · válida até ${dataBR(validade)} ·
+      valores de pacote são estimativa baseada no volume informado e variam conforme o uso real.
+    </p>`;
+}
+
+/* =========================================================
+   NAVEGAÇÃO E ESTADO
+   ========================================================= */
+let ULTIMO = null;
+
+function atualizar(){
+  const r = lerFormulario();
+  document.getElementById('q-docs-wrap').classList.toggle('hidden', r.assinatura !== 'digital');
+  document.getElementById('q-auto-extras').classList.toggle('hidden', r.confirmacao !== 'automatica');
+
+  // A condição especial da SEC IA só existe com o plano sem desconto.
+  const planoTemDesconto = r.desconto.tipo !== 'nenhum' && (r.desconto.meses||0) > 0;
+  const tier = PRICING.recorrentes.secia.find(x => x.atend === Number(r.seciaAtend));
+  document.getElementById('q-secia-extras').classList.toggle('hidden', !r.seciaAtend);
+  document.getElementById('q-secia-promo-wrap').classList.toggle('hidden', planoTemDesconto || !tier || tier.precoPromo == null);
+  document.getElementById('q-secia-promo-bloq').classList.toggle('hidden', !(planoTemDesconto && r.seciaPromo));
+  document.getElementById('q-secia-desc-wrap').classList.toggle('hidden', r.seciaPromo && !planoTemDesconto);
+  if(tier && tier.precoPromo != null){
+    const mp = PRICING.regras.promoSeciaMeses || 0;
+    document.getElementById('q-secia-promo-txt').innerHTML =
+      `Aplicar a condição especial: <b>${brl(tier.precoPromo)}</b> em vez de ${brl(tier.preco)} por <b>${mp} ${mp>1?'meses':'mês'}</b> — exige plano sem desconto`;
+  }
+  document.getElementById('wrap-desc-valor').style.display = r.desconto.tipo === 'percentual' ? '' : 'none';
+  document.getElementById('wrap-desc-meses').style.display = r.desconto.tipo === 'nenhum' ? 'none' : '';
+  const res = calcularTodos(r, PRICING);
+  ULTIMO = { r, res, P: PRICING, validade: r.validade || dataFutura(3) };
+  renderPreview(res, r);
+}
+
+function abrirProposta(){
+  if(!ULTIMO) atualizar();
+  renderProposta(ULTIMO);
+  mostrar('view-proposta');
+  window.scrollTo(0,0);
+}
+function voltarVendedor(){
+  try { history.replaceState(null,'',location.pathname); } catch(e){ location.hash = ''; }
+  mostrar('view-vendedor');
+}
+function mostrar(id){
+  ['view-vendedor','view-proposta'].forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id));
+}
+
+function encodeProposta(dados){
+  const payload = { r: dados.r, P: dados.P, validade: dados.validade };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+function decodeProposta(hash){
+  const payload = JSON.parse(decodeURIComponent(escape(atob(hash))));
+  const res = calcularTodos(payload.r, payload.P);
+  return { r: payload.r, P: payload.P, res, validade: payload.validade };
+}
+// Uma folha A4 com margem de 8mm tem ~1085px de altura útil a 96dpi.
+// Mede o conteúdo e escolhe o fator de redução necessário.
+function ajustarZoomImpressao(){
+  const el = document.getElementById('proposta-body');
+  // scrollHeight é 0 enquanto a view está escondida — medir aí daria zoom errado.
+  if(!el || !el.scrollHeight) return;
+  const alturaUtil = 1085, larguraUtil = 735;
+  // Comprime só até 0,75 — abaixo disso o texto fica ilegível e é melhor
+  // deixar a proposta ocupar duas folhas, quebrando entre os cards.
+  const fator = Math.max(0.67, Math.min(alturaUtil / el.scrollHeight, larguraUtil / el.scrollWidth, 1));
+  document.documentElement.style.setProperty('--print-zoom', (Math.floor(fator*100)/100).toString());
+}
+function imprimir(){ ajustarZoomImpressao(); window.print(); }
+window.addEventListener('beforeprint', ajustarZoomImpressao);
+
+/* =========================================================
+   IMAGEM PARA WHATSAPP
+   Captura a proposta numa largura fixa, para a imagem sair
+   igual independente da tela de quem gerou.
+   ========================================================= */
+let imgBlobAtual = null;
+let imgNomeAtual = 'proposta.png';
+const LARGURA_IMAGEM = 1000;
+
+async function gerarImagem(){
+  const btn = document.getElementById('btn-img');
+  const rotuloOriginal = btn.textContent;
+  if(typeof html2canvas === 'undefined'){
+    btn.textContent = 'Sem conexão — use o PDF';
+    setTimeout(()=> btn.textContent = rotuloOriginal, 4000);
+    return;
+  }
+  btn.textContent = 'Gerando...'; btn.disabled = true;
+
+  const alvo = document.getElementById('proposta-body');
+  const larguraAntes = alvo.style.width;
+  const maxAntes = alvo.style.maxWidth;
+  alvo.style.width = LARGURA_IMAGEM + 'px';
+  alvo.style.maxWidth = 'none';
+
+  // As classes md: do Tailwind respondem à largura da JANELA, não do elemento.
+  // Sem forçar aqui, a imagem sairia empilhada num notebook e em duas colunas
+  // num monitor grande. Forçamos para a imagem ser sempre igual.
+  const forcados = [];
+  const forcar = (sel, estilos) => {
+    document.querySelectorAll(sel).forEach(el => {
+      forcados.push([el, el.getAttribute('style')]);
+      Object.assign(el.style, estilos);
+    });
+  };
+  forcar('.dois-planos', { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px' });
+  forcar('.cap-inclusos', { display:'grid', gridTemplateColumns:'repeat(3, minmax(0,1fr))', gap:'10px' });
+  forcar('.cap-cabecalho', { flexWrap:'nowrap' });
+
+  try {
+    const canvas = await html2canvas(alvo, {
+      scale: 2,
+      backgroundColor: '#f1f5f9',
+      useCORS: true,
+      logging: false,
+      windowWidth: LARGURA_IMAGEM + 80,
+      width: LARGURA_IMAGEM,
+      height: alvo.scrollHeight
+    });
+    const dataUrl = canvas.toDataURL('image/png');
+    document.getElementById('img-preview').src = dataUrl;
+    const nome = (ULTIMO && ULTIMO.r.cliente ? ULTIMO.r.cliente : 'proposta')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase();
+    imgNomeAtual = `proposta-${nome}.png`;
+    canvas.toBlob(b => { imgBlobAtual = b; }, 'image/png');
+    document.getElementById('img-aviso').textContent =
+      `${canvas.width} × ${canvas.height} px`;
+    document.getElementById('img-modal').classList.remove('hidden');
+  } catch(e){
+    console.error(e);
+    btn.textContent = 'Falhou — tente o PDF';
+    setTimeout(()=> btn.textContent = rotuloOriginal, 4000);
+    return;
+  } finally {
+    alvo.style.width = larguraAntes;
+    alvo.style.maxWidth = maxAntes;
+    forcados.forEach(([el, antes]) => {
+      if(antes === null) el.removeAttribute('style'); else el.setAttribute('style', antes);
+    });
+    btn.disabled = false;
+    if(btn.textContent === 'Gerando...') btn.textContent = rotuloOriginal;
+  }
+}
+
+function fecharImagem(){ document.getElementById('img-modal').classList.add('hidden'); }
+
+// Salvar o arquivo tem dois caminhos. Servido por HTTP (ou aberto do disco),
+// um link comum resolve. Dentro do visualizador de Artifact, links de download
+// são inertes — lá o arquivo tem que passar pela capability `downloads`.
+async function baixarImagem(){
+  const btn = document.getElementById('btn-baixar-img');
+  const rotulo = btn.textContent;
+  if(!imgBlobAtual){ btn.textContent = 'Gerando ainda...'; setTimeout(()=> btn.textContent = rotulo, 2000); return; }
+
+  const dl = (typeof claude !== 'undefined' && typeof claude.use === 'function')
+    ? await claude.use('downloads').catch(()=> null)
+    : null;
+
+  if(dl){
+    try {
+      await dl.save({ filename: imgNomeAtual, data: imgBlobAtual });
+      btn.textContent = 'Salva';
+    } catch(e){
+      btn.textContent = (e && e.code === 'declined') ? 'Cancelado' : 'Não deu — use Copiar imagem';
+    }
+  } else {
+    const url = URL.createObjectURL(imgBlobAtual);
+    const a = document.createElement('a');
+    a.href = url; a.download = imgNomeAtual;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=> URL.revokeObjectURL(url), 5000);
+    btn.textContent = 'Baixada';
+  }
+  setTimeout(()=> btn.textContent = rotulo, 3000);
+}
+
+async function copiarImagem(){
+  const btn = document.getElementById('btn-copiar-img');
+  const rotulo = btn.textContent;
+  try {
+    if(!imgBlobAtual) throw new Error('imagem ainda não pronta');
+    await navigator.clipboard.write([ new ClipboardItem({ 'image/png': imgBlobAtual }) ]);
+    btn.textContent = 'Copiada — cole no WhatsApp';
+  } catch(e){
+    btn.textContent = 'Não deu — use o Baixar PNG';
+  }
+  setTimeout(()=> btn.textContent = rotulo, 3500);
+}
+
+function copiarLink(){
+  const url = location.origin + location.pathname + '#p=' + encodeProposta(ULTIMO);
+  navigator.clipboard.writeText(url).then(()=>{
+    const b = document.getElementById('btn-link');
+    const o = b.textContent; b.textContent = 'Link copiado';
+    setTimeout(()=> b.textContent = o, 2500);
+  });
+}
+
+/* =========================================================
+   ADMIN
+   ========================================================= */
+function abrirAdmin(){
+  const P = PRICING;
+  const flag = c => c ? ' <span class="text-[9px] font-black uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">confirmar</span>' : '';
+  const campo = (id, label, valor, extra='') =>
+    `<label class="block"><span class="text-[11px] text-slate-500 block">${label}${extra}</span>
+     <input id="${id}" type="number" step="0.01" value="${valor}" class="num-input w-full p-1.5 border border-slate-300 rounded text-sm"></label>`;
+
+  document.getElementById('admin-body').innerHTML = `
+    <div>
+      <h3 class="font-bold text-sm border-b border-slate-200 pb-1.5 mb-3">1. Planos</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        ${ORDEM_PLANOS.map(k=>`<div class="space-y-2">
+          <p class="text-xs font-bold text-slate-700">${P.planos[k].nome}</p>
+          ${campo('adm-'+k+'-mensal','Mensal',P.planos[k].mensal)}
+          ${campo('adm-'+k+'-anual','Anual (12x)',P.planos[k].anual)}
+        </div>`).join('')}
+      </div>
+    </div>
+    <div>
+      <h3 class="font-bold text-sm border-b border-slate-200 pb-1.5 mb-3">2. Pacotes de crédito</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        ${Object.entries(P.pacotes).map(([grp,g])=>`<div>
+          <p class="text-xs font-bold text-slate-700 mb-1.5">${g.rotulo}</p>
+          <div class="space-y-1.5">
+            ${g.opcoes.map((o,i)=>`<div class="flex items-end gap-2">
+              <label class="flex-1"><span class="text-[11px] text-slate-500 block">Qtd${flag(o.confirmar)}</span>
+                <input id="adm-pac-${grp}-${i}-qtd" type="number" value="${o.qtd}" class="num-input w-full p-1.5 border border-slate-300 rounded text-sm"></label>
+              <label class="flex-1"><span class="text-[11px] text-slate-500 block">Preço</span>
+                <input id="adm-pac-${grp}-${i}-preco" type="number" step="0.01" value="${o.preco}" class="num-input w-full p-1.5 border border-slate-300 rounded text-sm"></label>
+            </div>`).join('')}
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div>
+      <h3 class="font-bold text-sm border-b border-slate-200 pb-1.5 mb-3">3. Recorrentes</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        ${campo('adm-sia','SIA (voz)',P.recorrentes.sia.preco)}
+        ${P.recorrentes.secia.map((t,i)=>campo('adm-secia-'+i,`SEC IA ${t.atend}`,t.preco,flag(t.confirmar))).join('')}
+      </div>
+      <p class="text-[11px] font-bold text-emerald-700 mt-3 mb-1.5">Condição especial da SEC IA — só com plano sem desconto</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        ${P.recorrentes.secia.map((t,i)=>campo('adm-secia-promo-'+i,`Promo ${t.atend}`,t.precoPromo ?? '')).join('')}
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+        ${campo('adm-promo-secia-meses','Duração da condição (meses)',P.regras.promoSeciaMeses)}
+      </div>
+      <label class="flex items-center gap-2 text-sm text-slate-700 mt-2">
+        <input id="adm-promo-secia-regra" type="checkbox" ${P.regras.promoSeciaSoSemDesconto?'checked':''} class="w-4 h-4 rounded text-blue-600">
+        Exigir plano sem desconto para liberar a condição especial
+      </label>
+    </div>
+    <div>
+      <h3 class="font-bold text-sm border-b border-slate-200 pb-1.5 mb-3">4. Regras <span class="text-[9px] font-black uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">todas a confirmar</span></h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        ${campo('adm-msgs','Mensagens por consulta',P.regras.msgsPorConsulta)}
+        ${campo('adm-cap','Crédito máx. a recomendar (meses)',P.regras.capDuracaoMeses)}
+        ${campo('adm-teto-pro','Recomendar Pro até % acima',P.regras.tetoPremioProPct)}
+        <label class="block"><span class="text-[11px] text-slate-500 block">NF-e a partir de</span>
+          <select id="adm-nfe-min" class="w-full p-1.5 border border-slate-300 rounded text-sm bg-white">
+            ${ORDEM_PLANOS.map(k=>`<option value="${k}" ${P.regras.nfeMinPlano===k?'selected':''}>${P.planos[k].nome}</option>`).join('')}
+          </select></label>
+      </div>
+      <div class="mt-3 space-y-1.5">
+        <label class="flex items-center gap-2 text-sm text-slate-700"><input id="adm-semiauto" type="checkbox" ${P.regras.semiautoGratisApenasPro?'checked':''} class="w-4 h-4 rounded text-blue-600"> Confirmação pelo WhatsApp Web é grátis só no Pro</label>
+        <label class="flex items-center gap-2 text-sm text-slate-700"><input id="adm-ass-pro" type="checkbox" ${P.regras.assinaturaIlimitadaPro?'checked':''} class="w-4 h-4 rounded text-blue-600"> Assinatura eletrônica ilimitada no Pro</label>
+      </div>
+    </div>
+    <div>
+      <h3 class="font-bold text-sm border-b border-slate-200 pb-1.5 mb-3">5. Serviços inclusos — valor de tabela riscado na proposta</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        ${P.inclusos.map((x,i)=>`<label class="block"><span class="text-[11px] text-slate-500 block">${x.nome}</span>
+          <input id="adm-inc-${i}" type="number" step="0.01" value="${x.precoDe ?? ''}" placeholder="sem valor" class="num-input w-full p-1.5 border border-slate-300 rounded text-sm"></label>`).join('')}
+      </div>
+      <p class="text-[11px] text-slate-400 mt-2">Em branco = aparece só como "Incluso", sem preço riscado.</p>
+    </div>`;
+  document.getElementById('admin-modal').classList.remove('hidden');
+}
+function fecharAdmin(){ document.getElementById('admin-modal').classList.add('hidden'); }
+function salvarAdmin(){
+  const g = id => parseFloat(document.getElementById(id).value) || 0;
+  ORDEM_PLANOS.forEach(k=>{ PRICING.planos[k].mensal = g('adm-'+k+'-mensal'); PRICING.planos[k].anual = g('adm-'+k+'-anual'); });
+  Object.entries(PRICING.pacotes).forEach(([grp,grupo])=>{
+    grupo.opcoes.forEach((o,i)=>{ o.qtd = g(`adm-pac-${grp}-${i}-qtd`); o.preco = g(`adm-pac-${grp}-${i}-preco`); });
+  });
+  PRICING.recorrentes.sia.preco = g('adm-sia');
+  PRICING.recorrentes.secia.forEach((t,i)=>{
+    t.preco = g('adm-secia-'+i);
+    const v = document.getElementById('adm-secia-promo-'+i).value.trim();
+    t.precoPromo = v === '' ? null : (parseFloat(v) || null);
+  });
+  PRICING.regras.promoSeciaSoSemDesconto = document.getElementById('adm-promo-secia-regra').checked;
+  PRICING.regras.promoSeciaMeses = g('adm-promo-secia-meses');
+  PRICING.regras.msgsPorConsulta = g('adm-msgs') || 1;
+  PRICING.regras.capDuracaoMeses = g('adm-cap') || 12;
+  PRICING.regras.tetoPremioProPct = g('adm-teto-pro');
+  PRICING.regras.nfeMinPlano = document.getElementById('adm-nfe-min').value;
+  PRICING.regras.semiautoGratisApenasPro = document.getElementById('adm-semiauto').checked;
+  PRICING.inclusos.forEach((x,i)=>{
+    const v = document.getElementById('adm-inc-'+i).value.trim();
+    x.precoDe = v === '' ? null : (parseFloat(v) || null);
+  });
+  PRICING.regras.assinaturaIlimitadaPro = document.getElementById('adm-ass-pro').checked;
+  salvarPricing(); fecharAdmin(); atualizar();
+}
+function resetPricing(){
+  PRICING = JSON.parse(JSON.stringify(PRICING_PADRAO));
+  salvarPricing(); fecharAdmin(); atualizar();
+}
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+window.addEventListener('DOMContentLoaded', () => {
+  const hash = location.hash.startsWith('#p=') ? location.hash.slice(3) : null;
+  if(hash){
+    try {
+      renderProposta(decodeProposta(hash));
+      mostrar('view-proposta');
+      document.querySelector('#view-proposta .no-print').innerHTML =
+        '<div class="max-w-5xl mx-auto px-4 py-2.5 flex justify-end gap-2 text-xs">' +
+        '<button onclick="gerarImagem()" id="btn-img" class="px-3 py-1.5 font-bold bg-[#25D366] text-white rounded-lg">Gerar imagem</button>' +
+        '<button onclick="imprimir()" class="px-3 py-1.5 font-semibold text-slate-300 hover:text-white">PDF</button></div>';
+      return;
+    } catch(e){ console.error('Link inválido', e); }
+  }
+
+  document.getElementById('q-secia').innerHTML =
+    '<option value="">Não incluir</option>' +
+    PRICING.recorrentes.secia.map(t=>`<option value="${t.atend}">Até ${num(t.atend)} atendimentos — ${brl(t.preco)}</option>`).join('');
+  document.getElementById('q-validade').value = dataFutura(3);
+
+  renderRadios('q-confirmacao', OPCOES_CONFIRMACAO, 'semiautomatica');
+  renderRadios('q-assinatura', OPCOES_ASSINATURA, 'digital');
+
+  ['q-cliente','q-vendedor','q-consultas','q-notas','q-documentos','q-migracao','q-sia','q-secia','q-secia-promo','q-secia-desc','q-secia-desc-meses',
+   'q-manter-automatica','q-comparar','q-frequencia','q-validade','q-desc-tipo','q-desc-valor','q-desc-meses']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', atualizar);
+      el.addEventListener('change', atualizar);
+    });
+
+  // Ao entrar no campo, seleciona o que já está lá: o vendedor digita por cima
+  // em vez de apagar dígito por dígito.
+  document.querySelectorAll('input[type=number]').forEach(el => {
+    el.addEventListener('focus', function(){ setTimeout(() => this.select(), 0); });
+  });
+
+  document.getElementById('logo-header').innerHTML = LOGO_SVG;
+
+  mostrar('view-vendedor');
+  atualizar();
+});
+</script>
+</body>
+</html>
