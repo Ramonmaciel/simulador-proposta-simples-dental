@@ -97,19 +97,30 @@
           </div>
         </div>
 
-        <!-- 3. NF-e -->
+        <!-- 3 e 4. Marketing -->
         <div class="border border-slate-200 rounded-xl p-4">
-          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">3.</span> Quantas notas fiscais emite por mês?</p>
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">3.</span> Vai mandar mensagens de marketing?</p>
+          <div id="q-marketing-opt" class="mt-2 space-y-1.5"></div>
+          <div id="q-marketing-qtd-wrap" class="mt-3 hidden">
+            <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">4.</span> Quantas mensagens de marketing por mês?</p>
+            <input id="q-marketing-msgs" type="number" min="0" value="" placeholder="0" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-[11px] text-slate-500 mt-1.5">Aniversário, retorno, reativação de inativo. A mensagem de marketing custa mais que a de confirmação.</p>
+          </div>
+        </div>
+
+        <!-- 5. NF-e -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">5.</span> Quantas notas fiscais emite por mês?</p>
           <input id="q-notas" type="number" min="0" value="40" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
           <p class="text-[11px] text-slate-500 mt-1.5">Zero se o contador emite fora do sistema.</p>
         </div>
 
         <!-- 4. Assinatura -->
         <div class="border border-slate-200 rounded-xl p-4">
-          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">4.</span> Quer assinar os documentos digitalmente?</p>
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">6.</span> Quer assinar os documentos digitalmente?</p>
           <div id="q-assinatura" class="mt-2 space-y-1.5"></div>
           <div id="q-docs-wrap" class="mt-3 hidden">
-            <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">5.</span> Quantos documentos por mês?</p>
+            <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">7.</span> Quantos documentos por mês?</p>
             <input id="q-documentos" type="number" min="0" value="60" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
             <p class="text-[11px] text-slate-500 mt-1.5">Anamnese, evolução, contrato. Estimativa serve.</p>
           </div>
@@ -117,7 +128,7 @@
 
         <!-- 6. Migração -->
         <div class="border border-slate-200 rounded-xl p-4">
-          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">6.</span> Vem de outro software?</p>
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">8.</span> Vem de outro software?</p>
           <label class="mt-2 flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
             <input id="q-migracao" type="checkbox" class="w-4 h-4 rounded text-blue-600">
             Sim — incluir migração de dados (gratuita)
@@ -291,7 +302,8 @@ const PRICING_PADRAO = {
   pacotes: {
     nfe:          { rotulo: 'notas fiscais', unidade: 'notas',      opcoes: [ {qtd:50,preco:19.90}, {qtd:100,preco:29.90}, {qtd:200,preco:39.90} ] },
     assinatura:   { rotulo: 'assinaturas',   unidade: 'documentos', opcoes: [ {qtd:250,preco:99.90}, {qtd:600,preco:199.90}, {qtd:1000,preco:299.90} ] },
-    wppUtilidade: { rotulo: 'mensagens de confirmação', unidade: 'mensagens', opcoes: [ {qtd:300,preco:36.00,precoCheio:105.00} ] }
+    wppUtilidade: { rotulo: 'mensagens de confirmação', unidade: 'mensagens', opcoes: [ {qtd:300,preco:36.00,precoCheio:105.00} ] },
+    wppMarketing: { rotulo: 'mensagens de marketing',   unidade: 'mensagens', opcoes: [ {qtd:300,preco:150.00} ] }
   },
   recorrentes: {
     sia: { nome: 'SIA — prontuário por voz', preco: 39.90 },
@@ -307,6 +319,10 @@ const PRICING_PADRAO = {
     // clínica que assina 10 documentos por mês, economizando R$ 1 ao mês.
     capDuracaoMeses: 24,
     nfeMinPlano: 'plus',
+    // Ramon confirmou que SIA e SEC IA valem em qualquer plano e que "o resto é
+    // cobrado de tudo". O simulador antigo travava Marketing no Pro — nunca foi
+    // confirmado, então aqui vale para todos. Editável no admin.
+    marketingMinPlano: 'basic',
     semiautoGratisApenasPro: true,
     tetoPremioProPct: 30,
     promoSeciaSoSemDesconto: true,
@@ -328,13 +344,13 @@ let PRICING = carregarPricing();
 
 function carregarPricing(){
   try {
-    const raw = localStorage.getItem('sd_pricing_v12');
+    const raw = localStorage.getItem('sd_pricing_v13');
     if(raw) return JSON.parse(raw);
   } catch(e){}
   return JSON.parse(JSON.stringify(PRICING_PADRAO));
 }
 function salvarPricing(){
-  try { localStorage.setItem('sd_pricing_v12', JSON.stringify(PRICING)); } catch(e){}
+  try { localStorage.setItem('sd_pricing_v13', JSON.stringify(PRICING)); } catch(e){}
 }
 
 /* =========================================================
@@ -345,6 +361,7 @@ const num = v => new Intl.NumberFormat('pt-BR').format(v||0);
 function dataBR(iso){ if(!iso) return ''; const p=iso.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
 function dataFutura(dias){ const d=new Date(); d.setDate(d.getDate()+dias); return d.toISOString().split('T')[0]; }
 function mesesTexto(m){
+  if(m < 0.95) return 'menos de um mês';
   if(m>=11.5) return 'cerca de ' + Math.round(m/12*10)/10 + ' ' + (m>=23 ? 'anos' : 'ano');
   if(m<1.05) return 'cerca de 1 mês';
   return 'cerca de ' + (m<3 ? (Math.round(m*10)/10).toString().replace('.',',') : Math.round(m)) + ' meses';
@@ -438,6 +455,16 @@ function calcularPlano(planoKey, r, P){
     } else {
       const p = dimensionar(msgs, P.pacotes.wppUtilidade, g.capDuracaoMeses);
       linhas.push({ chave:'confirmacao', nome:'Confirmação de consulta', tipo:'pacote', pacote:p, mensal:p.mensalEquivalente });
+    }
+  }
+
+  // --- Campanhas de marketing ---
+  if(r.marketing === 'sim' && (r.marketingMsgs||0) > 0){
+    if(!atendePlano(planoKey, g.marketingMinPlano)){
+      bloqueios.push(`Campanhas de marketing por WhatsApp não estão disponíveis no ${plano.nome}`);
+    } else {
+      const p = dimensionar(r.marketingMsgs, P.pacotes.wppMarketing, g.capDuracaoMeses);
+      linhas.push({ chave:'marketing', nome:'Campanhas de marketing por WhatsApp', tipo:'pacote', pacote:p, mensal:p.mensalEquivalente });
     }
   }
 
@@ -580,6 +607,10 @@ const OPCOES_CONFIRMACAO = [
   { v:'semiautomatica', t:'Semiautomática pelo WhatsApp Web', d:'A secretária dispara com um clique — sem custo de mensagem no Pro' },
   { v:'nenhuma',        t:'Não quero confirmar por mensagem', d:'A clínica segue ligando ou não confirma' }
 ];
+const OPCOES_MARKETING = [
+  { v:'nao', t:'Não vou mandar', d:'Sem custo de mensagem de marketing na proposta' },
+  { v:'sim', t:'Sim, vou fazer campanha', d:'Aniversário, retorno de manutenção, reativação de paciente inativo' }
+];
 const OPCOES_ASSINATURA = [
   { v:'digital', t:'Quero assinar digitalmente', d:'Anamnese, evolução e contrato assinados pelo paciente no celular' },
   { v:'papel',   t:'Prefiro continuar no papel', d:'Sem assinatura eletrônica na proposta' }
@@ -592,6 +623,8 @@ function lerFormulario(){
     vendedor: val('q-vendedor'),
     consultasMes: numVal('q-consultas'),
     confirmacao: radioVal('q-confirmacao') || 'semiautomatica',
+    marketing: radioVal('q-marketing-opt') || 'nao',
+    marketingMsgs: numVal('q-marketing-msgs'),
     notasMes: numVal('q-notas'),
     assinatura: radioVal('q-assinatura') || 'digital',
     documentosMes: numVal('q-documentos'),
@@ -695,6 +728,7 @@ function renderPreview(res, r){
       </p>` : ''}
       <ul class="space-y-1">
         <li><b>${num(r.consultasMes)}</b> consultas/mês × ${PRICING.regras.msgsPorConsulta} mensagens = <b>${num(msgs)}</b> mensagens de confirmação por mês</li>
+        <li>${r.marketing==='sim' ? `<b>${num(r.marketingMsgs)}</b> mensagens de marketing/mês` : 'sem mensagens de marketing'}</li>
         <li><b>${num(r.notasMes)}</b> notas fiscais/mês</li>
         <li><b>${r.assinatura==='digital' ? num(r.documentosMes)+' documentos/mês para assinar' : 'documentos no papel — sem assinatura eletrônica'}</b></li>
         <li>Crédito máximo a recomendar: <b>${PRICING.regras.capDuracaoMeses} meses</b> — o crédito não expira, o teto existe só para não pedir um desembolso grande demais</li>
@@ -747,10 +781,16 @@ function linhaProposta(l){
         <p class="text-sm font-black text-slate-900 whitespace-nowrap">${brl(l.mensal)}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
       </div>
       <div class="mt-1.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-[11px] text-slate-600 leading-relaxed">
-        Você usa cerca de <b>${num(p.volumeMes)} ${p.unidade}</b> por mês.
-        Compra um pacote de <b>${num(p.qtd)} ${p.unidade} por ${brl(p.preco)}</b>${p.precoCheio ? ` <span class="line-through text-slate-400">${brl(p.precoCheio)}</span>` : ''},
-        que dura <b>${mesesTexto(p.duracaoMeses)}</b>.
-        Diluído no tempo, isso é <b>${brl(p.mensal ?? p.mensalEquivalente)} por mês</b>.
+        ${p.duracaoMeses >= 0.95 ? `
+          Você usa cerca de <b>${num(p.volumeMes)} ${p.unidade}</b> por mês.
+          Compra um pacote de <b>${num(p.qtd)} ${p.unidade} por ${brl(p.preco)}</b>${p.precoCheio ? ` <span class="line-through text-slate-400">${brl(p.precoCheio)}</span>` : ''},
+          que dura <b>${mesesTexto(p.duracaoMeses)}</b>.
+          Diluído no tempo, isso é <b>${brl(l.mensal)} por mês</b>.`
+        : `
+          Você usa cerca de <b>${num(p.volumeMes)} ${p.unidade}</b> por mês, e cada pacote traz
+          <b>${num(p.qtd)} por ${brl(p.preco)}</b>${p.precoCheio ? ` <span class="line-through text-slate-400">${brl(p.precoCheio)}</span>` : ''}.
+          Nesse volume são cerca de <b>${(Math.round(p.volumeMes / p.qtd * 10)/10).toString().replace('.',',')} pacotes por mês</b>,
+          o que dá <b>${brl(l.mensal)} por mês</b>.`}
       </div>
     </div>`;
   }
@@ -796,6 +836,7 @@ function renderProposta(dados){
 
   const resumo = [];
   if(r.consultasMes) resumo.push(`${num(r.consultasMes)} consultas`);
+  if(r.marketing==='sim' && r.marketingMsgs) resumo.push(`${num(r.marketingMsgs)} mensagens de campanha`);
   if(r.notasMes) resumo.push(`${num(r.notasMes)} notas fiscais`);
   if(r.assinatura==='digital' && r.documentosMes) resumo.push(`${num(r.documentosMes)} documentos`);
   if(resumo.length) resumo[resumo.length-1] += ' por mês';
@@ -904,6 +945,7 @@ function atualizar(){
   const r = lerFormulario();
   document.getElementById('q-docs-wrap').classList.toggle('hidden', r.assinatura !== 'digital');
   document.getElementById('q-auto-extras').classList.toggle('hidden', r.confirmacao !== 'automatica');
+  document.getElementById('q-marketing-qtd-wrap').classList.toggle('hidden', r.marketing !== 'sim');
 
   // A condição especial da SEC IA só existe com o plano sem desconto.
   const planoTemDesconto = r.desconto.tipo !== 'nenhum' && (r.desconto.meses||0) > 0;
@@ -944,7 +986,7 @@ function ajustarZoomImpressao(){
   const alturaUtil = 1085, larguraUtil = 735;
   // Comprime só até 0,75 — abaixo disso o texto fica ilegível e é melhor
   // deixar a proposta ocupar duas folhas, quebrando entre os cards.
-  const fator = Math.max(0.67, Math.min(alturaUtil / el.scrollHeight, larguraUtil / el.scrollWidth, 1));
+  const fator = Math.max(0.65, Math.min(alturaUtil / el.scrollHeight, larguraUtil / el.scrollWidth, 1));
   document.documentElement.style.setProperty('--print-zoom', (Math.floor(fator*100)/100).toString());
 }
 function imprimir(){ ajustarZoomImpressao(); window.print(); }
@@ -1131,6 +1173,10 @@ function abrirAdmin(){
         ${campo('adm-msgs','Mensagens por consulta',P.regras.msgsPorConsulta)}
         ${campo('adm-cap','Crédito máx. a recomendar (meses)',P.regras.capDuracaoMeses)}
         ${campo('adm-teto-pro','Recomendar Pro até % acima',P.regras.tetoPremioProPct)}
+        <label class="block"><span class="text-[11px] text-slate-500 block">Marketing a partir de</span>
+          <select id="adm-mkt-min" class="w-full p-1.5 border border-slate-300 rounded text-sm bg-white">
+            ${ORDEM_PLANOS.map(k=>`<option value="${k}" ${P.regras.marketingMinPlano===k?'selected':''}>${P.planos[k].nome}</option>`).join('')}
+          </select></label>
         <label class="block"><span class="text-[11px] text-slate-500 block">NF-e a partir de</span>
           <select id="adm-nfe-min" class="w-full p-1.5 border border-slate-300 rounded text-sm bg-white">
             ${ORDEM_PLANOS.map(k=>`<option value="${k}" ${P.regras.nfeMinPlano===k?'selected':''}>${P.planos[k].nome}</option>`).join('')}
@@ -1170,6 +1216,7 @@ function salvarAdmin(){
   PRICING.regras.capDuracaoMeses = g('adm-cap') || 12;
   PRICING.regras.tetoPremioProPct = g('adm-teto-pro');
   PRICING.regras.nfeMinPlano = document.getElementById('adm-nfe-min').value;
+  PRICING.regras.marketingMinPlano = document.getElementById('adm-mkt-min').value;
   PRICING.regras.semiautoGratisApenasPro = document.getElementById('adm-semiauto').checked;
   PRICING.inclusos.forEach((x,i)=>{
     const v = document.getElementById('adm-inc-'+i).value.trim();
@@ -1193,9 +1240,10 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('q-validade').value = dataFutura(3);
 
   renderRadios('q-confirmacao', OPCOES_CONFIRMACAO, 'semiautomatica');
+  renderRadios('q-marketing-opt', OPCOES_MARKETING, 'nao');
   renderRadios('q-assinatura', OPCOES_ASSINATURA, 'digital');
 
-  ['q-cliente','q-vendedor','q-consultas','q-notas','q-documentos','q-migracao','q-sia','q-secia','q-secia-promo','q-secia-desc','q-secia-desc-meses',
+  ['q-cliente','q-vendedor','q-consultas','q-marketing-msgs','q-notas','q-documentos','q-migracao','q-sia','q-secia','q-secia-promo','q-secia-desc','q-secia-desc-meses',
    'q-manter-automatica','q-comparar','q-frequencia','q-validade','q-desc-tipo','q-desc-valor','q-desc-meses']
     .forEach(id => {
       const el = document.getElementById(id);
