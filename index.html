@@ -80,7 +80,7 @@
         <!-- 1. Consultas -->
         <div class="border border-slate-200 rounded-xl p-4">
           <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">1.</span> Quantas consultas em média por mês?</p>
-          <input id="q-consultas" type="number" min="0" value="120" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+          <input id="q-consultas" type="number" min="0" value="" placeholder="0" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
           <p class="text-[11px] text-slate-500 mt-1.5">Base para dimensionar as mensagens de confirmação.</p>
         </div>
 
@@ -111,7 +111,7 @@
         <!-- 5. NF-e -->
         <div class="border border-slate-200 rounded-xl p-4">
           <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">5.</span> Quantas notas fiscais emite por mês?</p>
-          <input id="q-notas" type="number" min="0" value="40" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+          <input id="q-notas" type="number" min="0" value="" placeholder="0" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
           <p class="text-[11px] text-slate-500 mt-1.5">Zero se o contador emite fora do sistema.</p>
         </div>
 
@@ -121,14 +121,23 @@
           <div id="q-assinatura" class="mt-2 space-y-1.5"></div>
           <div id="q-docs-wrap" class="mt-3 hidden">
             <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">7.</span> Quantos documentos por mês?</p>
-            <input id="q-documentos" type="number" min="0" value="60" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
+            <input id="q-documentos" type="number" min="0" value="" placeholder="0" class="num-input mt-2 w-32 p-2.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500">
             <p class="text-[11px] text-slate-500 mt-1.5">Anamnese, evolução, contrato. Estimativa serve.</p>
           </div>
         </div>
 
-        <!-- 6. Migração -->
+        <!-- 8. Harmonização orofacial -->
         <div class="border border-slate-200 rounded-xl p-4">
-          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">8.</span> Vem de outro software?</p>
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">8.</span> A clínica faz harmonização facial?</p>
+          <label class="mt-2 flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+            <input id="q-hof" type="checkbox" class="mt-0.5 w-4 h-4 rounded text-blue-600">
+            <span>Sim — usa ou vai usar faciograma<span class="block text-[11px] text-slate-500">O faciograma é exclusivo do Pro, então a recomendação vai para o Pro</span></span>
+          </label>
+        </div>
+
+        <!-- 9. Migração -->
+        <div class="border border-slate-200 rounded-xl p-4">
+          <p class="text-sm font-bold text-slate-800"><span class="text-blue-600">9.</span> Vem de outro software?</p>
           <label class="mt-2 flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
             <input id="q-migracao" type="checkbox" class="w-4 h-4 rounded text-blue-600">
             Sim — incluir migração de dados (gratuita)
@@ -344,19 +353,23 @@ let PRICING = carregarPricing();
 
 function carregarPricing(){
   try {
-    const raw = localStorage.getItem('sd_pricing_v13');
+    const raw = localStorage.getItem('sd_pricing_v14');
     if(raw) return JSON.parse(raw);
   } catch(e){}
   return JSON.parse(JSON.stringify(PRICING_PADRAO));
 }
 function salvarPricing(){
-  try { localStorage.setItem('sd_pricing_v13', JSON.stringify(PRICING)); } catch(e){}
+  try { localStorage.setItem('sd_pricing_v14', JSON.stringify(PRICING)); } catch(e){}
 }
 
 /* =========================================================
    FORMATAÇÃO
    ========================================================= */
 const brl = v => 'R$ ' + new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v||0);
+// Toda linha da proposta é arredondada onde nasce. Sem isso o total soma as
+// frações escondidas e fica um centavo acima do que a coluna mostra — e o
+// cliente que soma na mão pega a diferença.
+const cent = v => Math.round((v || 0) * 100) / 100;
 const num = v => new Intl.NumberFormat('pt-BR').format(v||0);
 function dataBR(iso){ if(!iso) return ''; const p=iso.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; }
 function dataFutura(dias){ const d=new Date(); d.setDate(d.getDate()+dias); return d.toISOString().split('T')[0]; }
@@ -388,7 +401,7 @@ function dimensionar(volumeMes, grupo, capMeses){
     // Nenhum pacote cabe no teto: mesmo o menor rende mais meses que o
     // horizonte. Não se perde crédito, mas é bom o vendedor saber.
     excedeuTeto: duracao > capMeses,
-    mensalEquivalente: esc.preco / duracao,
+    mensalEquivalente: cent(esc.preco / duracao),
     unitario: esc.preco / esc.qtd,
     unidade: grupo.unidade,
     rotulo: grupo.rotulo,
@@ -420,7 +433,7 @@ function calcularPlano(planoKey, r, P){
   let planoNaPromo = valorPlano;
   if(temDesc){
     if(d.tipo === 'gratis') planoNaPromo = 0;
-    else if(d.tipo === 'percentual') planoNaPromo = valorPlano * (1 - (d.valor||0)/100);
+    else if(d.tipo === 'percentual') planoNaPromo = cent(valorPlano * (1 - (d.valor||0)/100));
   }
   const janela = temDesc ? `${d.meses} ${d.meses>1?'meses':'mês'}` : '';
   linhas.push({ chave:'plano', nome:`Plano ${plano.nome}`, tipo:'plano', mensal: valorPlano,
@@ -489,6 +502,17 @@ function calcularPlano(planoKey, r, P){
     }
   }
 
+  // --- Harmonização orofacial ---
+  if(r.hof){
+    if(planoKey === 'pro'){
+      linhas.push({ chave:'hof', nome:'Faciograma para harmonização', tipo:'incluso', mensal:0,
+                    detalhe:'Exclusivo do Pro — planejamento e evolução dos procedimentos faciais' });
+    } else {
+      linhas.push({ chave:'hof', nome:'Faciograma para harmonização', tipo:'indisponivel', mensal:0,
+                    detalhe:`Não existe no ${plano.nome} — disponível somente no Pro` });
+    }
+  }
+
   // --- Add-ons opcionais ---
   if(r.sia){
     linhas.push({ chave:'sia', nome:P.recorrentes.sia.nome, tipo:'recorrente', mensal:P.recorrentes.sia.preco, detalhe:'Valor fixo mensal' });
@@ -511,7 +535,7 @@ function calcularPlano(planoKey, r, P){
         detalhe = 'Exige o plano contratado sem desconto na mensalidade';
       } else if(pct > 0 && (r.seciaDescMeses||0) > 0){
         promoMeses = r.seciaDescMeses;
-        promoValor = t.preco * (1 - pct/100);
+        promoValor = cent(t.preco * (1 - pct/100));
         promoTexto = `${pct}% de desconto nos primeiros ${promoMeses} ${promoMeses>1?'meses':'mês'}`;
       }
       linhas.push({ chave:'secia', nome:`SEC IA — até ${num(t.atend)} atendimentos/mês`,
@@ -590,11 +614,12 @@ function calcularTodos(r, P){
   // frente ao plano mais barato que também atende.
   let recomendado = maisBarato.planoKey;
   let premioPro = null;
+  if(pro && r.hof && pro.atende) recomendado = 'pro';
   if(pro){
     premioPro = maisBarato.totalMensal > 0
       ? ((pro.totalMensal - maisBarato.totalMensal) / maisBarato.totalMensal) * 100
       : 0;
-    if(premioPro <= (P.regras.tetoPremioProPct ?? 30)) recomendado = 'pro';
+    if(!r.hof && premioPro <= (P.regras.tetoPremioProPct ?? 30)) recomendado = 'pro';
   }
   return { cenarios, recomendado, maisBarato, premioPro };
 }
@@ -628,6 +653,7 @@ function lerFormulario(){
     notasMes: numVal('q-notas'),
     assinatura: radioVal('q-assinatura') || 'digital',
     documentosMes: numVal('q-documentos'),
+    hof: document.getElementById('q-hof').checked,
     migracao: document.getElementById('q-migracao').checked,
     mostrarAutomaticaNoPro: document.getElementById('q-manter-automatica').checked,
     sia: document.getElementById('q-sia').checked,
@@ -664,7 +690,7 @@ function renderRadios(containerId, opcoes, selecionado){
 function renderPreview(res, r){
   const alvo = document.getElementById('preview-vendedor');
   const par = (r.comparar && r.comparar.length === 2) ? r.comparar : ['plus','pro'];
-  const destaque = recomendadoNoPar(res, par, PRICING);
+  const destaque = recomendadoNoPar(res, par, PRICING, r);
   const cards = res.cenarios.map((c,i) => {
     const rec = c.planoKey === destaque;
     const naProposta = par.includes(c.planoKey);
@@ -721,6 +747,10 @@ function renderPreview(res, r){
             : '<br>Neste caso o desconto no plano vale mais que a condição da SEC IA.'}
         </div>`;
       })()}
+      ${r.hof && !par.includes('pro') ? `<p class="mb-2 px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+        <b>A clínica faz harmonização facial, mas o Pro não está na proposta.</b>
+        O faciograma só existe no Pro — troque o par para incluir o Pro, senão a proposta não cobre isso.
+      </p>` : ''}
       <p class="font-bold text-slate-800 mb-2">Como o motor dimensionou</p>
       ${res.premioPro !== null ? `<p class="mb-2 px-2.5 py-1.5 rounded-lg ${res.recomendado==='pro'?'bg-blue-50 text-blue-900':'bg-amber-50 text-amber-900'}">
         Pro está <b>${res.premioPro<=0 ? 'mais barato' : Math.round(res.premioPro)+'% acima'}</b> do plano mais barato que atende (${res.maisBarato.nome}).
@@ -753,6 +783,12 @@ function linhaProposta(l){
         <p class="text-sm font-black ${comPromo?'text-blue-700':'text-slate-900'}">${brl(comPromo ? l.promoValor : l.mensal)}<span class="text-[11px] font-medium text-slate-400">/mês</span></p>
       </div>
     </div>`;
+  }
+  if(l.tipo === 'indisponivel'){
+    return `<div class="flex items-start justify-between gap-3 py-2.5 border-b border-slate-100">
+      <div><p class="text-sm font-semibold text-slate-400">${l.nome}</p>
+      <p class="text-[11px] text-slate-400">${l.detalhe||''}</p></div>
+      <p class="text-sm font-bold text-slate-400 whitespace-nowrap">Só no Pro</p></div>`;
   }
   if(l.tipo === 'incluso'){
     return `<div class="flex items-start justify-between gap-3 py-2.5 border-b border-slate-100">
@@ -809,12 +845,16 @@ function linhaProposta(l){
 // O destaque tem que cair dentro do par que foi para a proposta. Mesma regra
 // do motor, mas restrita aos dois planos escolhidos: prefere o de cima,
 // cedendo para o mais barato quando a diferença passa do teto.
-function recomendadoNoPar(res, par, P){
+function recomendadoNoPar(res, par, P, r){
   const elegiveis = par
     .map(k => res.cenarios.find(c => c.planoKey === k))
     .filter(c => c && c.atende);
   if(!elegiveis.length) return null;
   if(elegiveis.length === 1) return elegiveis[0].planoKey;
+
+  // Faciograma só existe no Pro: com harmonização facial na mesa, a
+  // recomendação é o Pro independente da diferença de preço.
+  if(r && r.hof && elegiveis.some(c => c.planoKey === 'pro')) return 'pro';
 
   const ordenados = [...elegiveis].sort((a,b)=> ORDEM_PLANOS.indexOf(a.planoKey) - ORDEM_PLANOS.indexOf(b.planoKey));
   const baixo = ordenados[0], alto = ordenados[ordenados.length-1];
@@ -843,7 +883,7 @@ function renderProposta(dados){
 
   // Só os dois planos escolhidos pelo vendedor entram na proposta.
   const par = (r.comparar && r.comparar.length === 2) ? r.comparar : ['plus','pro'];
-  const destaque = recomendadoNoPar(res, par, P);
+  const destaque = recomendadoNoPar(res, par, P, r);
   const cards = par.map(k => {
     const c = res.cenarios.find(x => x.planoKey === k);
     const rec = c.planoKey === destaque;
@@ -1243,7 +1283,7 @@ window.addEventListener('DOMContentLoaded', () => {
   renderRadios('q-marketing-opt', OPCOES_MARKETING, 'nao');
   renderRadios('q-assinatura', OPCOES_ASSINATURA, 'digital');
 
-  ['q-cliente','q-vendedor','q-consultas','q-marketing-msgs','q-notas','q-documentos','q-migracao','q-sia','q-secia','q-secia-promo','q-secia-desc','q-secia-desc-meses',
+  ['q-cliente','q-vendedor','q-consultas','q-marketing-msgs','q-notas','q-documentos','q-hof','q-migracao','q-sia','q-secia','q-secia-promo','q-secia-desc','q-secia-desc-meses',
    'q-manter-automatica','q-comparar','q-frequencia','q-validade','q-desc-tipo','q-desc-valor','q-desc-meses']
     .forEach(id => {
       const el = document.getElementById(id);
